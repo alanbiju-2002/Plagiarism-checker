@@ -1,0 +1,130 @@
+﻿--- STARTING PLAGIARISM DIAGNOSTIC ---
+Submission ID: 2
+Assignment ID: 1
+Extracted Text Sample: 
+
+ALAN BIJU 
+Thiruvalla, Kerala, India 689102 
++91
+Running plagiarismService.performPlagiarismCheck(2, ...)
+node : Error 
+performing 
+plagiarism check: 
+Error: Unknown 
+column 'checked_at' 
+in 'field list'
+At line:1 char:1
++ node diagnose-plag
+iarism.js > 
+diag_output.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~
+    + CategoryInfo  
+            : NotS  
+  pecified: (Erro   
+ r performin...i    
+n 'field list':    
+String) [], Rem    
+oteException
+    + FullyQualifie 
+   dErrorId : Nati  
+  veCommandError
+ 
+    at 
+PromisePool.execute 
+(C:\Users\admin\Desk
+top\main project mca
+_workspace\plagi3\no
+de_modules\mysql2\li
+b\promise\pool.js:54
+:22)
+    at PlagiarismSer
+vice.performPlagiari
+smCheck (C:\Users\ad
+min\Desktop\main 
+project mca_workspac
+e\plagi3\services\pl
+agiarismService.js:1
+67:18)
+    at process.proce
+ssTicksAndRejections
+ (node:internal/proc
+ess/task_queues:105:
+5)
+    at async debug (
+C:\Users\admin\Deskt
+op\main project mca_
+workspace\plagi3\dia
+gnose-plagiarism.js:
+22:24) {
+  code: 'ER_BAD_FIEL
+D_ERROR',
+  errno: 1054,
+  sql: 'UPDATE 
+submissions \n' +
+    '         SET 
+similarity_score = 
+?, status = ?, 
+rejection_reason = 
+?, checked_at = 
+NOW()\n' +
+    '         WHERE 
+id = ?',
+  sqlState: '42S22',
+  sqlMessage: 
+"Unknown column 
+'checked_at' in 
+'field list'"
+}
+--- DIAGNOSTIC 
+FAILED ---
+Error: Unknown 
+column 'checked_at' 
+in 'field list'
+    at 
+PromisePool.execute 
+(C:\Users\admin\Desk
+top\main project mca
+_workspace\plagi3\no
+de_modules\mysql2\li
+b\promise\pool.js:54
+:22)
+    at PlagiarismSer
+vice.performPlagiari
+smCheck (C:\Users\ad
+min\Desktop\main 
+project mca_workspac
+e\plagi3\services\pl
+agiarismService.js:1
+67:18)
+    at process.proce
+ssTicksAndRejections
+ (node:internal/proc
+ess/task_queues:105:
+5)
+    at async debug (
+C:\Users\admin\Deskt
+op\main project mca_
+workspace\plagi3\dia
+gnose-plagiarism.js:
+22:24) {
+  code: 'ER_BAD_FIEL
+D_ERROR',
+  errno: 1054,
+  sql: 'UPDATE 
+submissions \n' +
+    '         SET 
+similarity_score = 
+?, status = ?, 
+rejection_reason = 
+?, checked_at = 
+NOW()\n' +
+    '         WHERE 
+id = ?',
+  sqlState: '42S22',
+  sqlMessage: 
+"Unknown column 
+'checked_at' in 
+'field list'"
+}

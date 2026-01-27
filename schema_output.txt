@@ -1,0 +1,12 @@
+Columns in users table:
+- id (int)
+- username (varchar(50))
+- email (varchar(100))
+- hashed_password (varchar(255))
+- role (varchar(20))
+- is_active (tinyint(1))
+- is_approved (tinyint(1))
+- full_name (varchar(100))
+- status (enum('pending','approved','rejected'))
+- created_at (timestamp)
+- updated_at (timestamp)

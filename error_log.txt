@@ -1,0 +1,9 @@
+{
+  "message": "Field 'hashed_password' doesn't have a default value",
+  "code": "ER_NO_DEFAULT_FOR_FIELD",
+  "errno": 1364,
+  "sql": "INSERT INTO users (username, email, password, full_name, role, status) VALUES (?, ?, ?, ?, ?, ?)",
+  "sqlState": "HY000",
+  "sqlMessage": "Field 'hashed_password' doesn't have a default value"
+}
+Field 'hashed_password' doesn't have a default value

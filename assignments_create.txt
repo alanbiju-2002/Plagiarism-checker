@@ -1,0 +1,14 @@
+CREATE TABLE `assignments` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `title` varchar(100) NOT NULL,
+  `description` text,
+  `class_id` int NOT NULL,
+  `teacher_id` int NOT NULL,
+  `classroom_id` int NOT NULL,
+  `due_date` datetime DEFAULT NULL,
+  `max_score` int DEFAULT '100',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `classroom_id` (`classroom_id`),
+  CONSTRAINT `assignments_ibfk_1` FOREIGN KEY (`classroom_id`) REFERENCES `classrooms` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
