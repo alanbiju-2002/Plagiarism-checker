@@ -63,6 +63,8 @@ CREATE TABLE IF NOT EXISTS submissions (
   file_size INT,
   extracted_text TEXT,
   similarity_score DECIMAL(5,2) DEFAULT 0.00,
+  plagiarism_score DECIMAL(5,2) NULL,
+  originality_score DECIMAL(5,2) NULL,
   status ENUM('pending', 'checked', 'rejected', 'approved') DEFAULT 'pending',
   rejection_reason TEXT,
   submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -103,6 +105,7 @@ CREATE INDEX idx_submissions_status ON submissions(status);
 CREATE INDEX idx_plagiarism_submission ON plagiarism_matches(submission_id);
 CREATE INDEX idx_class_students_class ON class_students(class_id);
 CREATE INDEX idx_class_students_student ON class_students(student_id);
+
 
 
 

@@ -3,25 +3,28 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
+  Grid,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
+  Card,
+  CardContent,
   Chip,
   Button,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  // TextField removed (unused)
-  Alert,
   CircularProgress,
-  Input,
+  Alert
 } from '@mui/material';
-import { Upload as UploadIcon } from '@mui/icons-material';
+import {
+  Upload as UploadIcon,
+  Event as EventIcon,
+  Assignment as AssignmentIcon,
+  Description as FileIcon,
+  ErrorOutline as ErrorIcon,
+  CheckCircleOutline as CheckIcon,
+  Refresh as RefreshIcon,
+} from '@mui/icons-material';
 import api from '../../utils/api';
 
 const MyAssignments = () => {
@@ -53,8 +56,6 @@ const MyAssignments = () => {
     }
   }, [classId, fetchAssignments]);
 
-
-
   const handleFileSelect = (assignment) => {
     setSelectedAssignment(assignment);
     setOpen(true);
@@ -64,19 +65,13 @@ const MyAssignments = () => {
   };
 
   const handleResubmit = async (assignment) => {
-    if (window.confirm('Your previous submission was rejected. Resubmitting will delete it. Continue?')) {
+    if (window.confirm('Submission was flagged. Resubmitting will clear the previous record. Proceed?')) {
       try {
-        // Find the submission ID. We need to fetch it if not present in the assignment object.
-        // Actually, the assignment object from student/classes/:id/assignments doesn't have submission ID.
-        // Let's first delete by fetching all submissions for this user and finding the one for this assignment.
         const res = await api.get('/api/student/submissions');
         const submission = res.data.submissions.find(s => s.assignment_id === assignment.id);
-
         if (submission) {
           await api.delete(`/api/assignments/submissions/${submission.id}`);
         }
-
-        // Now open the upload dialog
         handleFileSelect(assignment);
       } catch (error) {
         console.error('Error handling resubmit:', error);
@@ -90,21 +85,16 @@ const MyAssignments = () => {
       setError('Please select a file');
       return;
     }
-
     setUploading(true);
     setError('');
     setSuccess('');
-
     const formData = new FormData();
     formData.append('file', file);
-
     try {
       await api.post(`/api/assignments/${selectedAssignment.id}/submit`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-      setSuccess('Assignment submitted successfully! Plagiarism check in progress.');
+      setSuccess('Work submitted successfully!');
       setOpen(false);
       fetchAssignments();
     } catch (error) {
@@ -114,141 +104,190 @@ const MyAssignments = () => {
     }
   };
 
-  const getStatusColor = (status, similarityScore) => {
-    if (status === 'rejected') return 'error';
-    if (status === 'checked' && similarityScore > 50) return 'error';
-    if (status === 'checked') return 'success';
-    return 'default';
+  const getStatusInfo = (status) => {
+    if (status === 'accepted') return { color: 'success', label: 'Accepted', icon: <CheckIcon fontSize="small" />, bg: '#f0fdf4', border: '#bcf0da' };
+    if (status === 'rejected') return { color: 'error', label: 'Flagged', icon: <ErrorIcon fontSize="small" />, bg: '#fef2f2', border: '#fecaca' };
+    if (status === 'submitted') return { color: 'info', label: 'Processing', icon: <RefreshIcon fontSize="small" className="spin-animation" />, bg: '#eff6ff', border: '#bfdbfe' };
+    return { color: 'secondary', label: 'Pending', icon: <EventIcon fontSize="small" />, bg: '#f8fafc', border: '#e2e8f0' };
   };
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" p={3}>
-        <CircularProgress />
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh">
+        <CircularProgress thickness={5} size={60} />
       </Box>
     );
   }
 
   if (!classId) {
     return (
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" color="text.secondary">
-          Please select a class to view assignments
+      <Paper sx={{ p: 8, textAlign: 'center', borderRadius: 4, bgcolor: 'transparent', border: '2px dashed #e2e8f0' }}>
+        <AssignmentIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+        <Typography variant="h5" fontWeight={700} color="text.secondary">
+          No Classroom Selected
         </Typography>
+        <Button href="/student/classes" variant="outlined" sx={{ mt: 2, borderRadius: 10 }}>
+          Go to My Classes
+        </Button>
       </Paper>
     );
   }
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        Assignments
-      </Typography>
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" fontWeight={800} sx={{ letterSpacing: '-0.02em', mb: 1 }}>
+          Course Assignments
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          Track deadlines and submit your original work for verification.
+        </Typography>
+      </Box>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
-          {error}
-        </Alert>
-      )}
+      {error && <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
+      {success && <Alert severity="success" sx={{ mb: 3, borderRadius: 2 }}>{success}</Alert>}
 
-      {success && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>
-          {success}
-        </Alert>
-      )}
+      <Grid container spacing={4}>
+        {assignments.length === 0 ? (
+          <Grid item xs={12}>
+            <Paper sx={{ p: 6, textAlign: 'center', borderRadius: 4 }}>
+              <Typography variant="h6" color="text.secondary">No assignments posted yet.</Typography>
+            </Paper>
+          </Grid>
+        ) : (
+          assignments.map((assignment) => {
+            const status = getStatusInfo(assignment.submission_status);
+            return (
+              <Grid item xs={12} md={6} key={assignment.id}>
+                <Card sx={{
+                  borderRadius: 4,
+                  overflow: 'hidden',
+                  transition: 'all 0.3s',
+                  '&:hover': { boxShadow: '0 10px 30px -5px rgba(0,0,0,0.1)' }
+                }}>
+                  <CardContent sx={{ p: 4 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+                      <Typography variant="h5" fontWeight={800} sx={{ flexGrow: 1, mr: 2 }}>
+                        {assignment.title}
+                      </Typography>
+                      <Chip
+                        icon={status.icon}
+                        label={status.label}
+                        sx={{
+                          bgcolor: status.bg,
+                          color: `${status.color}.main`,
+                          fontWeight: 700,
+                          border: `1px solid ${status.border}`
+                        }}
+                      />
+                    </Box>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Title</TableCell>
-              <TableCell>Description</TableCell>
-              <TableCell>Due Date</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Similarity Score</TableCell>
-              <TableCell>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {assignments.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} align="center">
-                  No assignments found
-                </TableCell>
-              </TableRow>
-            ) : (
-              assignments.map((assignment) => (
-                <TableRow key={assignment.id}>
-                  <TableCell>{assignment.title}</TableCell>
-                  <TableCell>{assignment.description || '-'}</TableCell>
-                  <TableCell>
-                    {assignment.due_date
-                      ? new Date(assignment.due_date).toLocaleDateString()
-                      : '-'}
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={assignment.submission_status || 'Not Submitted'}
-                      color={getStatusColor(
-                        assignment.submission_status,
-                        assignment.similarity_score
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 3, minHeight: 40 }}>
+                      {assignment.description || 'No additional instructions provided.'}
+                    </Typography>
+
+                    <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <EventIcon sx={{ color: 'text.disabled', fontSize: 18 }} />
+                        <Typography variant="caption" fontWeight={600} color="text.secondary">
+                          DUE: {assignment.due_date ? new Date(assignment.due_date).toLocaleDateString(undefined, { dateStyle: 'medium' }) : 'No Due Date'}
+                        </Typography>
+                      </Box>
+                      {assignment.submission_status && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <CheckIcon sx={{ color: 'success.main', fontSize: 18 }} />
+                          <Typography variant="caption" fontWeight={600} color="success.main">
+                            ALREADY SUBMITTED
+                          </Typography>
+                        </Box>
                       )}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {assignment.similarity_score !== null
-                      ? `${assignment.similarity_score}%`
-                      : '-'}
-                  </TableCell>
-                  <TableCell>
+                    </Box>
+                  </CardContent>
+                  <Box sx={{ p: 3, pt: 0, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
                     {!assignment.submission_status ? (
                       <Button
-                        variant="outlined"
-                        size="small"
+                        variant="contained"
                         startIcon={<UploadIcon />}
                         onClick={() => handleFileSelect(assignment)}
+                        sx={{ borderRadius: 2, px: 4, fontWeight: 700 }}
                       >
-                        Submit
+                        Submit Work
                       </Button>
                     ) : assignment.submission_status === 'rejected' ? (
                       <Button
-                        variant="contained"
-                        color="primary"
-                        size="small"
-                        startIcon={<UploadIcon />}
+                        variant="outlined"
+                        color="error"
+                        startIcon={<RefreshIcon />}
                         onClick={() => handleResubmit(assignment)}
+                        sx={{ borderRadius: 2, fontWeight: 700 }}
                       >
-                        Resubmit
+                        Resubmit Version
                       </Button>
-                    ) : null}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+                    ) : (
+                      <Button
+                        variant="soft"
+                        disabled
+                        sx={{ borderRadius: 2, bgcolor: '#f1f5f9', color: 'text.disabled' }}
+                      >
+                        View Receipt
+                      </Button>
+                    )}
+                  </Box>
+                </Card>
+              </Grid>
+            );
+          })
+        )}
+      </Grid>
 
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Submit Assignment: {selectedAssignment?.title}</DialogTitle>
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 4, p: 2 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, textAlign: 'center' }}>
+          Final Submission
+        </DialogTitle>
         <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <Input
-              type="file"
-              inputProps={{ accept: '.pdf,.docx,.doc,.txt' }}
-              onChange={(e) => setFile(e.target.files[0])}
-              fullWidth
-            />
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-              Accepted formats: PDF, DOCX, DOC, TXT (Max 10MB)
+          <Box sx={{
+            mt: 2,
+            border: '2px dashed #e2e8f0',
+            borderRadius: 3,
+            p: 4,
+            textAlign: 'center',
+            bgcolor: '#f8fafc',
+            transition: 'all 0.2s',
+            '&:hover': { bgcolor: '#f1f5f9', borderColor: 'primary.main' }
+          }}>
+            <FileIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2, opacity: 0.8 }} />
+            <Typography variant="body2" fontWeight={700} sx={{ mb: 1 }}>
+              {file ? file.name : 'Select your file'}
             </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 3 }}>
+              PDF, DOCX, or TXT (Max 10MB)
+            </Typography>
+            <Button
+              component="label"
+              variant="outlined"
+              size="small"
+              sx={{ borderRadius: 10, px: 3 }}
+            >
+              Choose File
+              <input type="file" hidden accept=".pdf,.docx,.doc,.txt" onChange={(e) => setFile(e.target.files[0])} />
+            </Button>
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={handleSubmit} variant="contained" disabled={uploading || !file}>
-            {uploading ? <CircularProgress size={24} /> : 'Submit'}
+        <DialogActions sx={{ p: 3, pt: 0, justifyContent: 'center', gap: 2 }}>
+          <Button onClick={() => setOpen(false)} sx={{ fontWeight: 700, color: 'text.secondary' }}>Cancel</Button>
+          <Button
+            onClick={handleSubmit}
+            variant="contained"
+            disabled={uploading || !file}
+            sx={{ borderRadius: 2, px: 4, fontWeight: 800 }}
+          >
+            {uploading ? <CircularProgress size={24} /> : 'Begin Audit'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -257,6 +296,7 @@ const MyAssignments = () => {
 };
 
 export default MyAssignments;
+
 
 
 

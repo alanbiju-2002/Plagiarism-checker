@@ -3,26 +3,38 @@ import {
   Box,
   Typography,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
+  TextField,
+  MenuItem,
   TableContainer,
+  Table,
   TableHead,
   TableRow,
+  TableCell,
+  TableBody,
   Chip,
   Button,
+  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  MenuItem,
-  TextField,
-  CircularProgress,
-  Alert,
-  IconButton,
-  Tooltip as MuiTooltip
+  Grid,
+  CircularProgress
 } from '@mui/material';
-import { Visibility } from '@mui/icons-material';
+import {
+  Visibility as ViewIcon,
+  FileDownload as DownloadIcon,
+  AutoFixHigh as AutoIcon,
+  Edit as EditIcon,
+  CheckCircle as CheckIcon,
+  Cancel as CancelIcon,
+  AssignmentTurnedIn as GradIcon,
+  Assessment as StatIcon,
+  Groups as ClassIcon,
+  Description as ReportIcon,
+  MoreVert as ActionsIcon,
+  Assessment as AssessmentIcon
+} from '@mui/icons-material';
 import api from '../../utils/api';
 
 const ViewSubmissions = () => {
@@ -42,6 +54,8 @@ const ViewSubmissions = () => {
   const [assigning, setAssigning] = useState(false);
   const [editingRoll, setEditingRoll] = useState(null);
   const [newRoll, setNewRoll] = useState('');
+  const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   const fetchClasses = useCallback(async () => {
     try {
@@ -92,6 +106,7 @@ const ViewSubmissions = () => {
   const handleViewDetails = async (submission) => {
     setSelectedSubmission(submission);
     setOpen(true);
+    setDetails(null);
     try {
       const response = await api.get(`/api/teacher/submissions/${submission.id}`);
       setDetails(response.data);
@@ -101,15 +116,64 @@ const ViewSubmissions = () => {
     }
   };
 
+  const handleUpdateStatus = async (newStatus) => {
+    if (newStatus === 'rejected') {
+      setRejectionDialogOpen(true);
+      setRejectionReason('');
+      return;
+    }
+
+    try {
+      await api.post(`/api/teacher/submissions/${selectedSubmission.id}/status`, {
+        status: newStatus,
+        rejection_reason: null
+      });
+      fetchSubmissions();
+      if (details) {
+        setDetails({
+          ...details,
+          submission: { ...details.submission, status: newStatus, rejection_reason: null }
+        });
+      }
+      alert(`Submission ${newStatus} successfully`);
+    } catch (error) {
+      console.error('Error updating status:', error);
+      alert('Failed to update status');
+    }
+  };
+
+  const handleConfirmReject = async () => {
+    try {
+      await api.post(`/api/teacher/submissions/${selectedSubmission.id}/status`, {
+        status: 'rejected',
+        rejection_reason: rejectionReason
+      });
+      setRejectionDialogOpen(false);
+      fetchSubmissions();
+      if (details) {
+        setDetails({
+          ...details,
+          submission: { ...details.submission, status: 'rejected', rejection_reason: rejectionReason }
+        });
+      }
+      alert('Submission rejected successfully');
+    } catch (error) {
+      console.error('Error rejecting submission:', error);
+      alert('Failed to reject submission');
+    }
+  };
+
   const handleUpdateScore = async () => {
     setGrading(true);
     try {
       await api.post(`/api/teacher/submissions/${selectedSubmission.id}/score`, { score });
       fetchSubmissions();
-      setDetails({
-        ...details,
-        submission: { ...details.submission, score }
-      });
+      if (details) {
+        setDetails({
+          ...details,
+          submission: { ...details.submission, score }
+        });
+      }
     } catch (error) {
       console.error('Error updating score:', error);
     } finally {
@@ -165,280 +229,361 @@ const ViewSubmissions = () => {
     }
   };
 
-  const getStatusColor = (status, similarityScore) => {
-    if (status === 'rejected' || similarityScore > 50) return 'error';
-    if (status === 'checked') return 'success';
-    return 'default';
+  const getStatusColor = (status, submission) => {
+    if (status === 'accepted' || status === 'checked') return { color: 'success', bg: '#f0fdf4' };
+    const similarity = submission?.similarity_score ?? 0;
+    if (status === 'rejected' || similarity > 50) return { color: 'error', bg: '#fef2f2' };
+    return { color: 'info', bg: '#eff6ff' };
   };
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        View Submissions
-      </Typography>
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <Box>
+          <Typography variant="h4" fontWeight={800} sx={{ letterSpacing: '-0.02em', mb: 1 }}>
+            Submission Audit
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Analyze academic integrity and manage student evaluations.
+          </Typography>
+        </Box>
+        {selectedAssignment && (
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="outlined"
+              startIcon={<AutoIcon />}
+              onClick={() => setAutoAssignOpen(true)}
+              sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 700 }}
+            >
+              Auto-Roll Config
+            </Button>
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<DownloadIcon />}
+              onClick={handleDownloadExcel}
+              sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 700, px: 3 }}
+            >
+              Export Scores
+            </Button>
+          </Box>
+        )}
+      </Box>
 
-      <Box sx={{ mt: 3, mb: 3, display: 'flex', gap: 2 }}>
+      <Paper sx={{ p: 3, mb: 4, borderRadius: 3, display: 'flex', gap: 3, alignItems: 'center', bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
         <TextField
           select
-          label="Select Class"
+          label="Select Classroom"
           value={selectedClass}
           onChange={(e) => {
             setSelectedClass(e.target.value);
             setSelectedAssignment('');
             setSubmissions([]);
           }}
-          sx={{ minWidth: 200 }}
+          sx={{ minWidth: 260, bgcolor: 'white' }}
+          size="small"
+          InputProps={{ startAdornment: <ClassIcon sx={{ mr: 1, color: 'text.disabled' }} /> }}
         >
           {classes.map((classItem) => (
-            <MenuItem key={classItem.id} value={classItem.id}>
-              {classItem.class_name}
-            </MenuItem>
+            <MenuItem key={classItem.id} value={classItem.id}>{classItem.class_name}</MenuItem>
           ))}
         </TextField>
 
-        {selectedClass && (
-          <TextField
-            select
-            label="Select Assignment"
-            value={selectedAssignment}
-            onChange={(e) => setSelectedAssignment(e.target.value)}
-            sx={{ minWidth: 200 }}
-          >
-            {assignments.map((assignment) => (
-              <MenuItem key={assignment.id} value={assignment.id}>
-                {assignment.title}
-              </MenuItem>
-            ))}
-          </TextField>
-        )}
-
-        {selectedAssignment && (
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button
-              variant="contained"
-              color="success"
-              onClick={handleDownloadExcel}
-              sx={{ height: 56 }}
-            >
-              Download Excel Report
-            </Button>
-            <Button
-              variant="outlined"
-              color="primary"
-              onClick={() => setAutoAssignOpen(true)}
-              sx={{ height: 56 }}
-            >
-              Auto-assign Rolls
-            </Button>
-          </Box>
-        )}
-      </Box>
+        <TextField
+          select
+          label="Select Module/Assignment"
+          value={selectedAssignment}
+          onChange={(e) => setSelectedAssignment(e.target.value)}
+          sx={{ minWidth: 260, bgcolor: 'white' }}
+          disabled={!selectedClass}
+          size="small"
+          InputProps={{ startAdornment: <ReportIcon sx={{ mr: 1, color: 'text.disabled' }} /> }}
+        >
+          {assignments.map((assignment) => (
+            <MenuItem key={assignment.id} value={assignment.id}>{assignment.title}</MenuItem>
+          ))}
+        </TextField>
+      </Paper>
 
       {loading ? (
-        <Box display="flex" justifyContent="center" p={3}>
-          <CircularProgress />
+        <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" py={12}>
+          <CircularProgress thickness={5} size={60} />
+          <Typography sx={{ mt: 2, color: 'text.secondary', fontWeight: 600 }}>Gathering submissions...</Typography>
         </Box>
       ) : (
-        <TableContainer component={Paper}>
-          <Table>
+        <TableContainer component={Paper} sx={{ borderRadius: 4, overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: 'none' }}>
+          <Table stickyHeader>
             <TableHead>
               <TableRow>
-                <TableCell>Roll Number</TableCell>
-                <TableCell>Student Name</TableCell>
-                <TableCell>Student Email</TableCell>
-                <TableCell>File Name</TableCell>
-                <TableCell>Submitted At</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Similarity Score</TableCell>
-                <TableCell>Marks/Score</TableCell>
-                <TableCell>Actions</TableCell>
+                <TableCell sx={{ fontWeight: 800, bgcolor: '#f1f5f9' }}>ROLL #</TableCell>
+                <TableCell sx={{ fontWeight: 800, bgcolor: '#f1f5f9' }}>STUDENT</TableCell>
+                <TableCell sx={{ fontWeight: 800, bgcolor: '#f1f5f9' }}>STATUS</TableCell>
+                <TableCell sx={{ fontWeight: 800, bgcolor: '#f1f5f9', textAlign: 'center' }}>SIMILARITY</TableCell>
+                <TableCell sx={{ fontWeight: 800, bgcolor: '#f1f5f9', textAlign: 'center' }}>SCORE</TableCell>
+                <TableCell sx={{ fontWeight: 800, bgcolor: '#f1f5f9', textAlign: 'right' }}>ACTIONS</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {submissions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center">
-                    {selectedAssignment
-                      ? 'No submissions found'
-                      : 'Please select a class and assignment'}
+                  <TableCell colSpan={6} align="center" sx={{ py: 10 }}>
+                    <StatIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
+                    <Typography variant="h6" color="text.secondary">
+                      {selectedAssignment ? 'No submissions yet for this assignment.' : 'Please choose a module to start the audit.'}
+                    </Typography>
                   </TableCell>
                 </TableRow>
               ) : (
-                submissions.map((submission) => (
-                  <TableRow key={submission.id}>
-                    <TableCell>
-                      {editingRoll === submission.student_id ? (
-                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                          <TextField
-                            size="small"
-                            value={newRoll}
-                            onChange={(e) => setNewRoll(e.target.value)}
-                            sx={{ width: 100 }}
-                          />
-                          <Button size="small" onClick={() => handleSaveRoll(submission.student_id)}>Save</Button>
-                          <Button size="small" color="error" onClick={() => setEditingRoll(null)}>X</Button>
-                        </Box>
-                      ) : (
-                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                          {submission.student_roll_number || 'N/A'}
-                          <Button size="small" onClick={() => handleStartEditRoll(submission)} sx={{ minWidth: 'auto' }}>
-                            Edit
-                          </Button>
-                        </Box>
-                      )}
-                    </TableCell>
-                    <TableCell>{submission.student_name}</TableCell>
-                    <TableCell>{submission.student_email}</TableCell>
-                    <TableCell>{submission.file_name}</TableCell>
-                    <TableCell>
-                      {new Date(submission.submitted_at).toLocaleString()}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={submission.status}
-                        color={getStatusColor(
-                          submission.status,
-                          submission.similarity_score
+                submissions.map((submission) => {
+                  const statusInfo = getStatusColor(submission.status, submission);
+                  return (
+                    <TableRow key={submission.id} sx={{ '&:hover': { bgcolor: '#f8fafc' } }}>
+                      <TableCell>
+                        {editingRoll === submission.student_id ? (
+                          <Box sx={{ display: 'flex', gap: 1 }}>
+                            <TextField size="small" value={newRoll} onChange={(e) => setNewRoll(e.target.value)} sx={{ width: 100 }} />
+                            <IconButton color="primary" onClick={() => handleSaveRoll(submission.student_id)}><CheckIcon /></IconButton>
+                          </Box>
+                        ) : (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography fontWeight={700} color="primary.main">{submission.student_roll_number || '---'}</Typography>
+                            <IconButton size="small" onClick={() => handleStartEditRoll(submission)} sx={{ opacity: 0.3, '&:hover': { opacity: 1 } }}>
+                              <EditIcon fontSize="inherit" />
+                            </IconButton>
+                          </Box>
                         )}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {submission.similarity_score !== null
-                        ? `${submission.similarity_score}%`
-                        : 'Pending'}
-                    </TableCell>
-                    <TableCell>
-                      {submission.score !== null ? submission.score : 'Not Graded'}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={() => handleViewDetails(submission)}
-                        sx={{ mr: 1 }}
-                      >
-                        View Details
-                      </Button>
-                      {submission.file_path && (
-                        <Button
-                          variant="contained"
+                      </TableCell>
+                      <TableCell>
+                        <Typography fontWeight={700}>{submission.student_name}</Typography>
+                        <Typography variant="caption" color="text.secondary">{submission.student_email}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={submission.status.toUpperCase()}
                           size="small"
-                          color="info"
-                          startIcon={<Visibility />}
-                          onClick={() => {
-                            // Normalize path: replace backslashes with forward slashes
-                            const normalizedPath = submission.file_path.replace(/\\/g, '/');
-                            const url = `http://localhost:5000/${normalizedPath}`;
-                            window.open(url, '_blank');
+                          sx={{
+                            fontWeight: 800,
+                            bgcolor: statusInfo.bg,
+                            color: `${statusInfo.color}.main`,
+                            borderRadius: 1
                           }}
-                        >
-                          View File
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
+                        />
+                      </TableCell>
+                      <TableCell align="center">
+                        {submission.similarity_score != null ? (
+                          <Typography fontWeight={800} color={submission.similarity_score > 30 ? 'error.main' : 'success.main'}>
+                            {submission.similarity_score}%
+                          </Typography>
+                        ) : '---'}
+                      </TableCell>
+                      <TableCell align="center">
+                        <Typography fontWeight={800} sx={{ bgcolor: '#f1f5f9', px: 1.5, py: 0.5, borderRadius: 2, display: 'inline-block' }}>
+                          {submission.score !== null ? submission.score : '--'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                          <Button
+                            variant="soft"
+                            size="small"
+                            startIcon={<ViewIcon />}
+                            onClick={() => handleViewDetails(submission)}
+                            sx={{ fontWeight: 700, borderRadius: 2 }}
+                          >
+                            Review
+                          </Button>
+                          {submission.file_path && (
+                            <IconButton
+                              color="primary"
+                              onClick={() => {
+                                const url = `http://localhost:5000/${submission.file_path.replace(/\\/g, '/')}`;
+                                window.open(url, '_blank');
+                              }}
+                            >
+                              <ReportIcon />
+                            </IconButton>
+                          )}
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
         </TableContainer>
       )}
 
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>
-          Submission Details: {selectedSubmission?.file_name}
+      {/* Details Report Dialog */}
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 4, overflow: 'hidden' } }}
+      >
+        <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <AssessmentIcon />
+            <Typography variant="h6" fontWeight={800}>Integrity Audit Report</Typography>
+          </Box>
+          <IconButton onClick={() => setOpen(false)} sx={{ color: 'white' }}><CancelIcon /></IconButton>
         </DialogTitle>
-        <DialogContent>
-          {details && (
+        <DialogContent sx={{ p: 4 }}>
+          {details ? (
             <Box>
-              <Typography variant="h6" gutterBottom>
-                Student: {details.submission.student_name || 'N/A'}
-              </Typography>
-              <Typography variant="body1" gutterBottom>
-                Status: {details.submission.status}
-              </Typography>
-              <Typography variant="body1" gutterBottom>
-                Similarity Score: {details.submission.similarity_score || 0}%
-              </Typography>
+              <Box sx={{ display: 'flex', gap: 4, mb: 4 }}>
+                <Box sx={{ flex: 1, p: 3, bgcolor: '#f8fafc', borderRadius: 3, border: '1px solid #e2e8f0' }}>
+                  <Typography variant="overline" color="text.secondary" fontWeight={800}>STUDENT INFO</Typography>
+                  <Typography variant="h5" fontWeight={800} sx={{ mt: 1 }}>{details.submission.student_name}</Typography>
+                  <Typography variant="body2" color="text.secondary">{details.submission.student_email}</Typography>
+                  <Typography variant="body2" sx={{ mt: 1 }}>Roll: <b>{details.submission.student_roll_number || 'N/A'}</b></Typography>
+                </Box>
+                <Box sx={{ flex: 1, p: 3, bgcolor: '#f8fafc', borderRadius: 3, border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                  <Typography variant="overline" color="text.secondary" fontWeight={800}>MATCH INDEX</Typography>
+                  <Typography variant="h3" fontWeight={900} color={details.submission.similarity_score > 30 ? 'error.main' : 'success.main'} sx={{ mt: 1 }}>
+                    {details.submission.similarity_score ?? 0}%
+                  </Typography>
+                  <Typography variant="caption" fontWeight={700}>Duplicate Content Detected</Typography>
+                </Box>
+              </Box>
 
-              <Box sx={{ mt: 3, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-                <Typography variant="h6" gutterBottom>
-                  Grade Submission
+              <Grid container spacing={3} sx={{ mb: 4 }}>
+                <Grid item xs={6}>
+                  <Box sx={{ p: 2, border: '1px solid #e2e8f0', borderRadius: 2 }}>
+                    <Typography variant="caption" fontWeight={700} color="text.secondary">AI PROBABILITY</Typography>
+                    <Typography variant="h6" fontWeight={800}>{details.submission.plagiarism_score ?? 0}%</Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={6}>
+                  <Box sx={{ p: 2, border: '1px solid #e2e8f0', borderRadius: 2 }}>
+                    <Typography variant="caption" fontWeight={700} color="text.secondary">ORIGINALITY</Typography>
+                    <Typography variant="h6" fontWeight={800}>{details.submission.originality_score ?? 100}%</Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+
+              <Box sx={{ mb: 4, p: 3, bgcolor: '#f1f5f9', borderRadius: 3 }}>
+                <Typography variant="h6" fontWeight={800} sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <GradIcon fontSize="small" /> Evaluation & Grading
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                <Box sx={{ display: 'flex', gap: 2 }}>
                   <TextField
-                    label="Score"
+                    label="Assigned Marks"
                     type="number"
                     value={score}
                     onChange={(e) => setScore(e.target.value)}
                     size="small"
+                    sx={{ bgcolor: 'white', width: 200 }}
                   />
                   <Button
                     variant="contained"
                     onClick={handleUpdateScore}
                     disabled={grading}
+                    sx={{ borderRadius: 2, fontWeight: 800, px: 4 }}
                   >
-                    {grading ? <CircularProgress size={24} /> : 'Save Score'}
+                    {grading ? <CircularProgress size={24} color="inherit" /> : 'Apply Grade'}
                   </Button>
                 </Box>
               </Box>
 
-              {details.submission.rejection_reason && (
-                <Alert severity="error" sx={{ mt: 2 }}>
-                  {details.submission.rejection_reason}
-                </Alert>
-              )}
-              {details.matches && details.matches.length > 0 && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Plagiarism Matches:
+              <Box sx={{ display: 'flex', gap: 2, mb: 4 }}>
+                <Button
+                  variant="contained"
+                  color="success"
+                  startIcon={<CheckIcon />}
+                  onClick={() => handleUpdateStatus('accepted')}
+                  disabled={details.submission.status === 'accepted'}
+                  sx={{ flex: 1, borderRadius: 2, py: 1.5, fontWeight: 800 }}
+                >
+                  Confirm Acceptance
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<CancelIcon />}
+                  onClick={() => handleUpdateStatus('rejected')}
+                  disabled={details.submission.status === 'rejected'}
+                  sx={{ flex: 1, borderRadius: 2, py: 1.5, fontWeight: 800 }}
+                >
+                  Flag Submission
+                </Button>
+              </Box>
+
+              {details.matches?.length > 0 && (
+                <Box>
+                  <Typography variant="h6" fontWeight={800} gutterBottom sx={{ borderBottom: '2px solid #f1f5f9', pb: 1 }}>
+                    Plagiarism Breakdown
                   </Typography>
-                  {details.matches.map((match, index) => (
-                    <Paper key={index} sx={{ p: 2, mt: 1 }}>
-                      <Typography variant="body2">
-                        Source: {match.matched_source_type === 'external'
-                          ? match.external_source_title
-                          : `Submission by ${match.matched_student_name}`}
+                  {details.matches.map((match, idx) => (
+                    <Paper key={idx} sx={{ p: 2, mt: 2, bgcolor: '#fff6f6', borderLeft: '4px solid #ef4444' }}>
+                      <Typography variant="subtitle2" fontWeight={800}>
+                        {match.matched_source_type === 'external' ? 'Web Source Found' : `Match with student: ${match.matched_student_name}`}
                       </Typography>
-                      <Typography variant="body2">
-                        Similarity: {match.similarity_percentage}%
-                      </Typography>
+                      {match.external_source_url && (
+                        <Typography variant="caption" sx={{ display: 'block', mb: 1 }}>Source URL: {match.external_source_url}</Typography>
+                      )}
+                      <Typography variant="h6" fontWeight={900} color="error.main">{match.similarity_percentage}% MATCH</Typography>
                     </Paper>
                   ))}
                 </Box>
               )}
             </Box>
+          ) : (
+            <Box sx={{ textAlign: 'center', py: 6 }}>
+              <CircularProgress size={40} />
+              <Typography sx={{ mt: 2, color: 'text.secondary' }}>Synthesizing audit data...</Typography>
+            </Box>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpen(false)}>Close</Button>
-        </DialogActions>
       </Dialog>
 
-      <Dialog open={autoAssignOpen} onClose={() => setAutoAssignOpen(false)}>
-        <DialogTitle>Auto-assign Roll Numbers</DialogTitle>
+      {/* Rejection/Flag Reason Dialog */}
+      <Dialog
+        open={rejectionDialogOpen}
+        onClose={() => setRejectionDialogOpen(false)}
+        PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>Reason for Flagging Submission</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" sx={{ mb: 2 }}>
-            This will assign roll numbers to ALL students in this class based on their alphabetical name order.
+          <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
+            Provide feedback to the student about why this submission was flagged. This will appear on their dashboard.
           </Typography>
           <TextField
-            fullWidth
-            label="Roll Number Prefix"
-            value={rollPrefix}
-            onChange={(e) => setRollPrefix(e.target.value)}
-            helperText="Example: MCA_ (will generate MCA_001, MCA_002, etc.)"
+            fullWidth multiline rows={4}
+            label="Audit Feedback"
+            value={rejectionReason}
+            onChange={(e) => setRejectionReason(e.target.value)}
+            placeholder="e.g., Excessive similarity detected. Please rework the section on..."
             sx={{ mt: 1 }}
           />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAutoAssignOpen(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={handleAutoAssign}
-            disabled={assigning}
-          >
-            {assigning ? <CircularProgress size={24} /> : 'Assign Now'}
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => setRejectionDialogOpen(false)} sx={{ fontWeight: 700 }}>Cancel</Button>
+          <Button variant="contained" color="error" onClick={handleConfirmReject} sx={{ fontWeight: 800, borderRadius: 2 }}>Confirm Flag</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Roll Configuration Dialog */}
+      <Dialog
+        open={autoAssignOpen}
+        onClose={() => setAutoAssignOpen(false)}
+        PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>Sequence configuration</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth label="Roll ID Prefix"
+            value={rollPrefix}
+            onChange={(e) => setRollPrefix(e.target.value)}
+            helperText="Applies alphabetical sequencing (001, 002, etc.)"
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => setAutoAssignOpen(false)} sx={{ fontWeight: 700 }}>Cancel</Button>
+          <Button variant="contained" onClick={handleAutoAssign} disabled={assigning} sx={{ fontWeight: 800, borderRadius: 2 }}>
+            {assigning ? <CircularProgress size={24} /> : 'Process Roll IDs'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -447,6 +592,7 @@ const ViewSubmissions = () => {
 };
 
 export default ViewSubmissions;
+
 
 
 

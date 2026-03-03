@@ -9,9 +9,18 @@ import {
     Box,
     Alert,
     CircularProgress,
-    Avatar
+    Avatar,
+    InputAdornment
 } from '@mui/material';
-import { PhotoCamera } from '@mui/icons-material';
+import {
+    PhotoCamera,
+    Person as PersonIcon,
+    Email as EmailIcon,
+    Lock as LockIcon,
+    Badge as BadgeIcon,
+    Save as SaveIcon,
+    Cancel as CancelIcon
+} from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 
 const EditProfile = () => {
@@ -21,7 +30,7 @@ const EditProfile = () => {
     const [formData, setFormData] = useState({
         username: '',
         email: '',
-        password: '', // Empty means no change
+        password: '',
         full_name: '',
         roll_number: '',
     });
@@ -70,7 +79,6 @@ const EditProfile = () => {
 
         const data = new FormData();
         data.append('full_name', formData.full_name);
-        // Email is editable, but check backend logic
         data.append('email', formData.email);
 
         if (formData.password) {
@@ -88,9 +96,7 @@ const EditProfile = () => {
         const result = await updateProfile(data);
 
         if (result.success) {
-            setSuccess('Profile updated successfully!');
-            // Optional: Redirect back to dashboard after short delay
-            // setTimeout(() => navigate(-1), 1500); 
+            setSuccess('Profile configuration updated.');
         } else {
             setError(result.message);
         }
@@ -98,138 +104,170 @@ const EditProfile = () => {
     };
 
     return (
-        <Container component="main" maxWidth="sm">
-            <Box
-                sx={{
-                    marginTop: 8,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                }}
-            >
-                <Paper elevation={3} sx={{ padding: 4, width: '100%', borderRadius: 2 }}>
-                    <Typography component="h1" variant="h4" align="center" gutterBottom fontWeight="bold" color="primary">
-                        Edit Profile
+        <Box sx={{
+            minHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            py: 8,
+            px: 2
+        }}>
+            <Container maxWidth="sm">
+                <Paper
+                    elevation={0}
+                    sx={{
+                        p: 5,
+                        borderRadius: 6,
+                        bgcolor: 'rgba(255, 255, 255, 0.8)',
+                        backdropFilter: 'blur(30px)',
+                        border: '1px solid rgba(255, 255, 255, 0.4)',
+                        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.1)'
+                    }}
+                >
+                    <Typography variant="h4" align="center" fontWeight={900} sx={{ letterSpacing: '-0.02em', mb: 1, color: 'primary.dark' }}>
+                        Identity Management
+                    </Typography>
+                    <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 4 }}>
+                        Keep your professional profile data accurate and verified.
                     </Typography>
 
-                    {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
-                    {success && <Alert severity="success" sx={{ mt: 2 }}>{success}</Alert>}
+                    {error && <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
+                    {success && <Alert severity="success" sx={{ mb: 3, borderRadius: 2 }}>{success}</Alert>}
 
-                    <Box component="form" onSubmit={handleSubmit} sx={{ mt: 3 }}>
-
-                        {/* Profile Picture Upload Area */}
-                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3 }}>
+                    <Box component="form" onSubmit={handleSubmit}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 5 }}>
                             <Box sx={{ position: 'relative' }}>
                                 <Avatar
                                     src={preview}
-                                    alt="Profile"
-                                    sx={{ width: 120, height: 120, border: '4px solid #f0f0f0', boxShadow: '0 4px 8px rgba(0,0,0,0.1)' }}
+                                    sx={{
+                                        width: 130,
+                                        height: 130,
+                                        border: '6px solid white',
+                                        boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+                                        fontSize: '3rem',
+                                        fontWeight: 800,
+                                        bgcolor: 'primary.light'
+                                    }}
                                 >
                                     {!preview && user?.full_name?.charAt(0).toUpperCase()}
                                 </Avatar>
                                 <Button
                                     variant="contained"
                                     component="label"
-                                    color="secondary"
-                                    size="small"
+                                    color="primary"
                                     sx={{
                                         position: 'absolute',
-                                        bottom: 0,
-                                        right: -10,
+                                        bottom: 5,
+                                        right: 5,
                                         minWidth: 'auto',
-                                        padding: '6px',
-                                        borderRadius: '50%'
+                                        width: 40,
+                                        height: 40,
+                                        borderRadius: '12px',
+                                        boxShadow: '0 5px 15px rgba(99, 102, 241, 0.4)'
                                     }}
                                 >
                                     <PhotoCamera fontSize="small" />
-                                    <input
-                                        type="file"
-                                        hidden
-                                        accept="image/*"
-                                        onChange={handleFileChange}
-                                    />
+                                    <input type="file" hidden accept="image/*" onChange={handleFileChange} />
                                 </Button>
                             </Box>
-                            <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-                                Click icon to change photo
-                            </Typography>
                         </Box>
 
-                        <TextField
-                            margin="normal"
-                            fullWidth
-                            label="Username"
-                            value={formData.username}
-                            disabled
-                            helperText="Username cannot be changed"
-                        />
-
-                        <TextField
-                            margin="normal"
-                            required
-                            fullWidth
-                            label="Full Name"
-                            name="full_name"
-                            value={formData.full_name}
-                            onChange={handleChange}
-                        />
-
-                        <TextField
-                            margin="normal"
-                            required
-                            fullWidth
-                            label="Email"
-                            name="email"
-                            type="email"
-                            value={formData.email}
-                            onChange={handleChange}
-                        />
-
-                        {user?.role === 'student' && (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
                             <TextField
-                                margin="normal"
                                 fullWidth
-                                label="Roll Number"
-                                name="roll_number"
-                                value={formData.roll_number}
-                                onChange={handleChange}
+                                label="System ID (Read-only)"
+                                value={formData.username}
+                                disabled
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3, bgcolor: '#f8fafc' } }}
                             />
-                        )}
 
-                        <TextField
-                            margin="normal"
-                            fullWidth
-                            label="New Password"
-                            name="password"
-                            type="password"
-                            value={formData.password}
-                            onChange={handleChange}
-                            helperText="Leave blank to keep current password"
-                        />
+                            <TextField
+                                required
+                                fullWidth
+                                label="Full Legal Name"
+                                name="full_name"
+                                value={formData.full_name}
+                                onChange={handleChange}
+                                InputProps={{
+                                    startAdornment: <InputAdornment position="start"><PersonIcon color="primary" /></InputAdornment>,
+                                }}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
+                            />
 
-                        <Box sx={{ display: 'flex', gap: 2, mt: 4 }}>
+                            <TextField
+                                required
+                                fullWidth
+                                label="Verified Email"
+                                name="email"
+                                type="email"
+                                value={formData.email}
+                                onChange={handleChange}
+                                InputProps={{
+                                    startAdornment: <InputAdornment position="start"><EmailIcon color="primary" /></InputAdornment>,
+                                }}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
+                            />
+
+                            {user?.role === 'student' && (
+                                <TextField
+                                    fullWidth
+                                    label="Academic Roll Number"
+                                    name="roll_number"
+                                    value={formData.roll_number}
+                                    onChange={handleChange}
+                                    InputProps={{
+                                        startAdornment: <InputAdornment position="start"><BadgeIcon color="primary" /></InputAdornment>,
+                                    }}
+                                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
+                                />
+                            )}
+
+                            <TextField
+                                fullWidth
+                                label="Security Credential (New)"
+                                name="password"
+                                type="password"
+                                placeholder="Leave blank to retain current"
+                                value={formData.password}
+                                onChange={handleChange}
+                                InputProps={{
+                                    startAdornment: <InputAdornment position="start"><LockIcon color="primary" /></InputAdornment>,
+                                }}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
+                            />
+                        </Box>
+
+                        <Box sx={{ display: 'flex', gap: 2, mt: 5 }}>
                             <Button
                                 fullWidth
                                 variant="outlined"
                                 color="inherit"
+                                startIcon={<CancelIcon />}
                                 onClick={() => navigate(-1)}
-                                disabled={loading}
+                                sx={{ borderRadius: 3, py: 1.5, fontWeight: 700 }}
                             >
-                                Cancel
+                                Discard
                             </Button>
                             <Button
                                 type="submit"
                                 fullWidth
                                 variant="contained"
                                 disabled={loading}
+                                startIcon={loading ? null : <SaveIcon />}
+                                sx={{
+                                    borderRadius: 3,
+                                    py: 1.5,
+                                    fontWeight: 800,
+                                    boxShadow: '0 10px 20px rgba(99, 102, 241, 0.2)'
+                                }}
                             >
-                                {loading ? <CircularProgress size={24} color="inherit" /> : 'Save Changes'}
+                                {loading ? <CircularProgress size={24} color="inherit" /> : 'Apply Sync'}
                             </Button>
                         </Box>
                     </Box>
                 </Paper>
-            </Box>
-        </Container>
+            </Container>
+        </Box>
     );
 };
 

@@ -48,6 +48,29 @@ app.use('/api', (req, res) => {
   });
 });
 
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error('--- GLOBAL ERROR CAUGHT ---');
+  console.error('URL:', req.method, req.originalUrl);
+  console.error('Message:', err.message);
+  console.error('Stack:', err.stack);
+
+  // Specific handler for Multer errors
+  if (err instanceof require('multer').MulterError) {
+    return res.status(400).json({
+      message: 'File upload error',
+      error: err.code,
+      field: err.field
+    });
+  }
+
+  res.status(500).json({
+    message: 'Internal Server Error',
+    error: err.message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
+});
+
 // Serve static files from React app in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, 'client/build')));
@@ -61,6 +84,7 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
 
 
 

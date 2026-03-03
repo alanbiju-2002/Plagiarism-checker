@@ -426,6 +426,47 @@ router.post('/submissions/:submissionId/score', async (req, res) => {
   }
 });
 
+// Update status for a submission (Accept/Reject)
+router.post('/submissions/:submissionId/status', async (req, res) => {
+  try {
+    const { submissionId } = req.params;
+    const { status, rejection_reason } = req.body;
+    const teacher_id = req.user.id;
+
+    if (!['accepted', 'rejected'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status. Must be accepted or rejected.' });
+    }
+
+    // Verify teacher owns the class of this submission
+    const [submissions] = await pool.execute(
+      `SELECT s.id, a.teacher_id FROM submissions s
+       JOIN assignments a ON s.assignment_id = a.id
+       WHERE s.id = ?`,
+      [submissionId]
+    );
+
+    if (submissions.length === 0) {
+      return res.status(404).json({ message: 'Submission not found' });
+    }
+
+    if (submissions[0].teacher_id !== teacher_id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const reason = status === 'rejected' ? rejection_reason : null;
+
+    await pool.execute(
+      'UPDATE submissions SET status = ?, rejection_reason = ? WHERE id = ?',
+      [status, reason, submissionId]
+    );
+
+    res.json({ message: `Submission ${status} successfully`, status });
+  } catch (error) {
+    console.error('Error updating submission status:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Update a student's roll number manually
 router.put('/students/:studentId/roll-number', async (req, res) => {
   try {
@@ -531,7 +572,7 @@ router.get('/assignments/:assignmentId/export', async (req, res) => {
 
     // Get all students and их submissions
     const [data] = await pool.execute(
-      `SELECT u.roll_number, u.full_name, s.score, s.similarity_score, s.status, s.submitted_at
+      `SELECT u.roll_number, u.full_name, s.score, s.similarity_score, s.plagiarism_score, s.originality_score, s.status, s.submitted_at
        FROM users u
        JOIN class_students cs ON u.id = cs.student_id
        JOIN assignments a ON cs.class_id = a.class_id
@@ -546,7 +587,9 @@ router.get('/assignments/:assignmentId/export', async (req, res) => {
       'Roll Number': row.roll_number || 'N/A',
       'Student Name': row.full_name,
       'Score': row.score !== null ? row.score : 'Not Graded',
-      'Similarity %': row.similarity_score !== null ? row.similarity_score : 'N/A',
+      'Similarity %': row.similarity_score != null ? row.similarity_score : 'N/A',
+      'Plagiarism %': row.plagiarism_score != null ? row.plagiarism_score : 'N/A',
+      'Originality %': row.originality_score != null ? row.originality_score : 'N/A',
       'Status': row.status || 'Not Submitted',
       'Submitted At': row.submitted_at ? new Date(row.submitted_at).toLocaleString() : 'N/A'
     }));
@@ -569,6 +612,7 @@ router.get('/assignments/:assignmentId/export', async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 

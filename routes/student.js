@@ -92,12 +92,16 @@ router.get('/classes/:classId/assignments', async (req, res) => {
 
     const [assignments] = await pool.execute(
       `SELECT a.*, 
-       (SELECT status FROM submissions WHERE assignment_id = a.id AND student_id = ?) as submission_status,
-       (SELECT similarity_score FROM submissions WHERE assignment_id = a.id AND student_id = ?) as similarity_score
+       (SELECT CASE 
+          WHEN status = 'accepted' THEN 'accepted' 
+          WHEN status = 'rejected' THEN 'rejected' 
+          ELSE 'pending' 
+        END 
+        FROM submissions WHERE assignment_id = a.id AND student_id = ?) as submission_status
        FROM assignments a
        WHERE a.class_id = ?
        ORDER BY a.created_at DESC`,
-      [student_id, student_id, classId]
+      [student_id, classId]
     );
 
     res.json({ assignments });
@@ -113,7 +117,13 @@ router.get('/submissions', async (req, res) => {
     const student_id = req.user.id;
 
     const [submissions] = await pool.execute(
-      `SELECT s.*, a.title as assignment_title, a.class_id, c.class_name
+      `SELECT s.id, s.assignment_id, s.submitted_at, s.file_name, s.rejection_reason,
+              CASE 
+                WHEN s.status = 'accepted' THEN 'accepted' 
+                WHEN s.status = 'rejected' THEN 'rejected' 
+                ELSE 'pending' 
+              END as status,
+              a.title as assignment_title, a.class_id, c.class_name
        FROM submissions s
        JOIN assignments a ON s.assignment_id = a.id
        JOIN classes c ON a.class_id = c.id
@@ -149,23 +159,21 @@ router.get('/submissions/:submissionId', async (req, res) => {
       return res.status(404).json({ message: 'Submission not found' });
     }
 
-    // Get plagiarism matches
-    const [matches] = await pool.execute(
-      `SELECT pm.*, 
-       u.full_name as matched_student_name,
-       es.title as external_source_title
-       FROM plagiarism_matches pm
-       LEFT JOIN submissions s2 ON pm.matched_submission_id = s2.id
-       LEFT JOIN users u ON s2.student_id = u.id
-       LEFT JOIN external_sources es ON pm.matched_source_type = 'external'
-       WHERE pm.submission_id = ?
-       ORDER BY pm.similarity_percentage DESC`,
-      [submissionId]
-    );
+    const submission = submissions[0];
+    // Mask status and remove score
+    if (submission.status === 'accepted') {
+      submission.status = 'accepted';
+    } else if (submission.status === 'rejected') {
+      submission.status = 'rejected';
+    } else {
+      submission.status = 'pending';
+    }
+    delete submission.similarity_score;
+    delete submission.extracted_text;
 
     res.json({
-      submission: submissions[0],
-      matches: matches
+      submission: submission,
+      matches: [] // Students don't see matches
     });
   } catch (error) {
     console.error('Error fetching submission details:', error);
@@ -174,6 +182,7 @@ router.get('/submissions/:submissionId', async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 

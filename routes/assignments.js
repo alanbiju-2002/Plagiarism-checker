@@ -81,10 +81,18 @@ router.post('/:assignmentId/submit', authenticate, upload.single('file'), async 
     // Extract text from file
     let extractedText = '';
     try {
+      console.log(`Extracting text from: ${req.file.path} (${req.file.mimetype})`);
       extractedText = await fileService.extractText(req.file.path, req.file.mimetype);
+      if (!extractedText) {
+        console.warn('Warning: Extracted text is empty');
+      }
     } catch (error) {
-      await fs.unlink(req.file.path);
-      return res.status(400).json({ message: error.message });
+      console.error('Text extraction error:', error);
+      await fs.unlink(req.file.path).catch(() => { });
+      return res.status(400).json({
+        message: 'Failed to extract text from document',
+        error: error.message
+      });
     }
 
     // Create submission record
@@ -106,9 +114,16 @@ router.post('/:assignmentId/submit', authenticate, upload.single('file'), async 
     const submissionId = result.insertId;
 
     // Perform plagiarism check asynchronously
+    console.log(`Starting plagiarism check for submission ${submissionId}`);
     plagiarismService.performPlagiarismCheck(submissionId, assignmentId, extractedText)
+      .then(result => {
+        console.log(`Plagiarism check completed for submission ${submissionId}:`, result.status);
+      })
       .catch(error => {
-        console.error('Plagiarism check error:', error);
+        console.error(`Plagiarism check failed for submission ${submissionId}:`, error);
+        // We don't return an error to the user here because the submission 
+        // record was already created and the response sent (or about to be sent).
+        // The background check failure should be logged for admin investigation.
       });
 
     res.status(201).json({
@@ -117,7 +132,7 @@ router.post('/:assignmentId/submit', authenticate, upload.single('file'), async 
     });
   } catch (error) {
     if (req.file) {
-      await fs.unlink(req.file.path).catch(() => {});
+      await fs.unlink(req.file.path).catch(() => { });
     }
     console.error('Error submitting assignment:', error);
     res.status(500).json({ message: 'Server error' });
@@ -204,6 +219,7 @@ router.delete('/submissions/:submissionId', authenticate, async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 

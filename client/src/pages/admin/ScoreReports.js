@@ -2,19 +2,29 @@ import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Chip,
   CircularProgress,
+  Button,
   TextField,
   InputAdornment,
+  TableContainer,
+  Paper,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  Chip
 } from '@mui/material';
-import { Search as SearchIcon } from '@mui/icons-material';
+import {
+  AssessmentOutlined as ReportIcon,
+  Search as SearchIcon,
+  Class as ClassIcon,
+  Assignment as AssignmentIcon,
+  Person as PersonIcon,
+  Percent as PercentIcon,
+  History as HistoryIcon,
+  BarChart as ChartIcon
+} from '@mui/icons-material';
 import api from '../../utils/api';
 
 const ScoreReports = () => {
@@ -53,88 +63,115 @@ const ScoreReports = () => {
     }
   };
 
-  const getStatusColor = (status, similarityScore) => {
-    if (status === 'rejected' || similarityScore > 50) return 'error';
-    if (status === 'checked') return 'success';
-    return 'default';
+  const getScoreColor = (score) => {
+    if (score === null || score === undefined) return 'text.disabled';
+    if (score > 50) return 'error.main';
+    if (score > 20) return 'warning.main';
+    return 'success.main';
   };
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" p={3}>
-        <CircularProgress />
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
+        <CircularProgress thickness={5} size={50} sx={{ color: 'secondary.main' }} />
       </Box>
     );
   }
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        Score Reports
-      </Typography>
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <Box>
+          <Typography variant="h4" fontWeight={900} sx={{ letterSpacing: '-0.02em', mb: 1, color: 'secondary.dark' }}>
+            Integrity Analytics
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Comprehensive audit of student performance and authenticity metrics across all departments.
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button variant="soft" startIcon={<ChartIcon />} sx={{ borderRadius: 2, fontWeight: 700 }}>Export Data</Button>
+        </Box>
+      </Box>
 
       <TextField
         fullWidth
-        placeholder="Search by student name, assignment, or class..."
+        placeholder="Filter by identities, assignments, or faculty codes..."
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
-        sx={{ mt: 3, mb: 3 }}
+        sx={{
+          mb: 4,
+          '& .MuiOutlinedInput-root': {
+            borderRadius: 3,
+            bgcolor: 'white',
+            '& fieldset': { borderColor: '#e2e8f0' },
+            '&:hover fieldset': { borderColor: 'primary.main' }
+          }
+        }}
         InputProps={{
           startAdornment: (
             <InputAdornment position="start">
-              <SearchIcon />
+              <SearchIcon color="primary" />
             </InputAdornment>
           ),
         }}
       />
 
-      <TableContainer component={Paper}>
-        <Table>
+      <TableContainer component={Paper} sx={{ borderRadius: 4, overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: 'none' }}>
+        <Table stickyHeader>
           <TableHead>
             <TableRow>
-              <TableCell>Student Name</TableCell>
-              <TableCell>Student Email</TableCell>
-              <TableCell>Assignment</TableCell>
-              <TableCell>Class</TableCell>
-              <TableCell>Similarity Score</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Submitted At</TableCell>
-              <TableCell>Checked At</TableCell>
+              <TableCell sx={{ fontWeight: 800, bgcolor: '#f8fafc' }}><PersonIcon sx={{ fontSize: 18, mr: 1, verticalAlign: 'middle' }} /> ENTITY</TableCell>
+              <TableCell sx={{ fontWeight: 800, bgcolor: '#f8fafc' }}><AssignmentIcon sx={{ fontSize: 18, mr: 1, verticalAlign: 'middle' }} /> ASSIGNMENT</TableCell>
+              <TableCell sx={{ fontWeight: 800, bgcolor: '#f8fafc' }}><ClassIcon sx={{ fontSize: 18, mr: 1, verticalAlign: 'middle' }} /> CLASS</TableCell>
+              <TableCell sx={{ fontWeight: 800, bgcolor: '#f8fafc', textAlign: 'center' }}><PercentIcon sx={{ fontSize: 18, mr: 1, verticalAlign: 'middle' }} /> SIMILARITY</TableCell>
+              <TableCell sx={{ fontWeight: 800, bgcolor: '#f8fafc', textAlign: 'center' }}>ORIGINALITY</TableCell>
+              <TableCell sx={{ fontWeight: 800, bgcolor: '#f8fafc' }}><HistoryIcon sx={{ fontSize: 18, mr: 1, verticalAlign: 'middle' }} /> AUDIT LOG</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {filteredScores.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} align="center">
-                  No scores found
+                <TableCell colSpan={6} align="center" sx={{ py: 10 }}>
+                  <ReportIcon sx={{ fontSize: 64, color: 'text.disabled', opacity: 0.3, mb: 2 }} />
+                  <Typography variant="h6" color="text.secondary" fontWeight={700}>Log Empty</Typography>
+                  <Typography variant="body2" color="text.disabled">No matching telemetry data found.</Typography>
                 </TableCell>
               </TableRow>
             ) : (
               filteredScores.map((score) => (
-                <TableRow key={score.id}>
-                  <TableCell>{score.student_name}</TableCell>
-                  <TableCell>{score.student_email}</TableCell>
-                  <TableCell>{score.assignment_title}</TableCell>
-                  <TableCell>{score.class_name}</TableCell>
+                <TableRow key={score.id} sx={{ '&:hover': { bgcolor: '#f9fafb' } }}>
                   <TableCell>
-                    {score.similarity_score !== null
-                      ? `${score.similarity_score}%`
-                      : 'Pending'}
+                    <Typography variant="subtitle2" fontWeight={800}>{score.student_name}</Typography>
+                    <Typography variant="caption" color="text.secondary">{score.student_email}</Typography>
                   </TableCell>
                   <TableCell>
-                    <Chip
-                      label={score.status}
-                      color={getStatusColor(score.status, score.similarity_score)}
-                      size="small"
-                    />
+                    <Typography variant="body2" fontWeight={600} color="primary.main">{score.assignment_title}</Typography>
                   </TableCell>
                   <TableCell>
-                    {new Date(score.submitted_at).toLocaleString()}
+                    <Chip label={score.class_name} size="small" sx={{ fontWeight: 700, borderRadius: 1.5, bgcolor: '#f1f5f9' }} />
+                  </TableCell>
+                  <TableCell align="center">
+                    <Typography variant="body2" fontWeight={900} sx={{ color: getScoreColor(score.similarity_score) }}>
+                      {score.similarity_score != null ? `${score.similarity_score}%` : '---'}
+                    </Typography>
+                  </TableCell>
+                  <TableCell align="center">
+                    <Typography variant="body2" fontWeight={900} sx={{ color: score.originality_score > 80 ? 'success.main' : 'text.primary' }}>
+                      {score.originality_score != null ? `${score.originality_score}%` : '---'}
+                    </Typography>
                   </TableCell>
                   <TableCell>
-                    {score.checked_at
-                      ? new Date(score.checked_at).toLocaleString()
-                      : '-'}
+                    <Box>
+                      <Typography variant="caption" display="block" color="text.secondary">
+                        <b>Submitted:</b> {new Date(score.submitted_at).toLocaleDateString()}
+                      </Typography>
+                      {score.checked_at && (
+                        <Typography variant="caption" display="block" color="success.main" fontWeight={600}>
+                          <b>Verified:</b> {new Date(score.checked_at).toLocaleDateString()}
+                        </Typography>
+                      )}
+                    </Box>
                   </TableCell>
                 </TableRow>
               ))
@@ -147,6 +184,7 @@ const ScoreReports = () => {
 };
 
 export default ScoreReports;
+
 
 
 

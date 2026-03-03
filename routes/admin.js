@@ -90,6 +90,8 @@ router.get('/scores', async (req, res) => {
       `SELECT 
         s.id,
         s.similarity_score,
+        s.plagiarism_score,
+        s.originality_score,
         s.status,
         s.submitted_at,
         s.checked_at,
@@ -161,6 +163,7 @@ router.delete('/users/:userId', async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 
