@@ -32,6 +32,7 @@ import MyClasses from './MyClasses';
 import CreateClass from './CreateClass';
 import CreateAssignment from './CreateAssignment';
 import ViewSubmissions from './ViewSubmissions';
+import SubmissionStatus from './SubmissionStatus';
 
 const drawerWidth = 260;
 
@@ -46,6 +47,7 @@ const TeacherDashboard = () => {
     { text: 'Create Class', icon: <ClassIcon />, path: '/teacher/create-class' },
     { text: 'Create Assignment', icon: <AssignmentIcon />, path: '/teacher/create-assignment' },
     { text: 'View Submissions', icon: <PeopleIcon />, path: '/teacher/submissions' },
+    { text: 'Submission Status', icon: <AssignmentIcon />, path: '/teacher/submission-status' },
   ];
   const selectedIndex = menuItems.findIndex((item) => location.pathname === item.path);
 
@@ -215,6 +217,7 @@ const TeacherDashboard = () => {
             <Route path="create-class" element={<CreateClass />} />
             <Route path="create-assignment" element={<CreateAssignment />} />
             <Route path="submissions" element={<ViewSubmissions />} />
+            <Route path="submission-status" element={<SubmissionStatus />} />
             <Route path="*" element={<MyClasses />} />
           </Routes>
         </Container>

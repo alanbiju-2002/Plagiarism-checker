@@ -2,6 +2,7 @@ const express = require('express');
 const XLSX = require('xlsx');
 const pool = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth');
+const emailService = require('../services/emailService');
 
 const router = express.Router();
 
@@ -248,6 +249,55 @@ router.get('/assignments/:assignmentId/submissions', async (req, res) => {
   }
 });
 
+// Get submission status for ALL students in a class for a specific assignment
+router.get('/assignments/:assignmentId/status-list', async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+
+    // 1. Verify teacher owns the assignment and get the class_id
+    const [assignments] = await pool.execute(
+      'SELECT class_id, teacher_id FROM assignments WHERE id = ?',
+      [assignmentId]
+    );
+
+    if (assignments.length === 0) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    if (assignments[0].teacher_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const classId = assignments[0].class_id;
+    console.log(`Fetching status list for Assignment: ${assignmentId}, Class: ${classId}`);
+
+    // 2. Get all students in the class and their submission status for this assignment
+    const [statusList] = await pool.execute(
+      `SELECT 
+        u.id as student_id,
+        u.full_name,
+        u.roll_number,
+        u.email,
+        IF(MAX(s.id) IS NOT NULL, 'Submitted', 'Not Submitted') as status,
+        MAX(s.submitted_at) as submitted_at,
+        MAX(s.similarity_score) as similarity_score
+       FROM users u
+       JOIN class_students cs ON u.id = cs.student_id
+       LEFT JOIN submissions s ON u.id = s.student_id AND s.assignment_id = ?
+       WHERE cs.class_id = ?
+       GROUP BY u.id
+       ORDER BY u.roll_number, u.full_name`,
+      [assignmentId, classId]
+    );
+
+    console.log(`Found ${statusList.length} students in enrollment list.`);
+    res.json({ statusList });
+  } catch (error) {
+    console.error('Error fetching submission status list:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Get submission details with score (for teachers)
 router.get('/submissions/:submissionId', async (req, res) => {
   try {
@@ -459,6 +509,21 @@ router.post('/submissions/:submissionId/status', async (req, res) => {
       'UPDATE submissions SET status = ?, rejection_reason = ? WHERE id = ?',
       [status, reason, submissionId]
     );
+
+    if (status === 'rejected') {
+      // Get student email and assignment title
+      const [subInfo] = await pool.execute(
+        `SELECT u.email, a.title 
+         FROM submissions s
+         JOIN users u ON s.student_id = u.id
+         JOIN assignments a ON s.assignment_id = a.id
+         WHERE s.id = ?`,
+        [submissionId]
+      );
+      if (subInfo.length > 0) {
+        emailService.sendRejectionEmail(subInfo[0].email, subInfo[0].title, reason);
+      }
+    }
 
     res.json({ message: `Submission ${status} successfully`, status });
   } catch (error) {

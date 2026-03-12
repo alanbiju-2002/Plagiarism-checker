@@ -1,5 +1,6 @@
-const stringSimilarity = require('string-similarity');
 const pool = require('../config/database');
+const axios = require('axios');
+const emailService = require('./emailService');
 
 // Optional: spell checker for plagiarism score (spelling + AI, etc.)
 let spellDictionary = null;
@@ -211,6 +212,21 @@ class PlagiarismService {
         ? `Assignment rejected due to ${overallMaxSimilarity.toFixed(2)}% similarity with other sources. Maximum allowed is 50%.`
         : null;
 
+      if (status === 'rejected') {
+        // Find student email and assignment title
+        const [subInfo] = await pool.execute(
+          `SELECT u.email, a.title 
+           FROM submissions s
+           JOIN users u ON s.student_id = u.id
+           JOIN assignments a ON s.assignment_id = a.id
+           WHERE s.id = ?`,
+          [submissionId]
+        );
+        if (subInfo.length > 0) {
+          emailService.sendRejectionEmail(subInfo[0].email, subInfo[0].title, rejectionReason);
+        }
+      }
+
       // --- Plagiarism score (writing: spelling, AI, etc.) ---
       const writingResult = await new Promise((resolve) => {
         this.computeWritingPlagiarismScore(text, (err, result) => {
@@ -247,12 +263,79 @@ class PlagiarismService {
       );
 
       try {
+        // Find the best hybrid score among all matches
+        let maxHybrid = 0;
+        let bestShingle = 0;
+        let bestCosine = 0;
+        let bestSemantic = 0;
+        let bestAi = 0;
+        let bestAnalysis = JSON.stringify([]);
+
+        for (const match of allMatches) {
+          try {
+            // Get original text and matched text
+            let matchedText = '';
+            if (match.matched_source_type === 'submission') {
+              const [mSub] = await pool.execute('SELECT extracted_text FROM submissions WHERE id = ?', [match.matched_submission_id]);
+              matchedText = mSub[0]?.extracted_text || '';
+            } else if (match.matched_source_type === 'external') {
+              const [mExt] = await pool.execute('SELECT extracted_text FROM external_sources WHERE id = ?', [match.external_source_id]);
+              matchedText = mExt[0]?.extracted_text || '';
+            }
+
+            if (matchedText) {
+              const response = await axios.post('http://127.0.0.1:8000/api/auth/check-plagiarism/', {
+                text1: text,
+                text2: matchedText
+              });
+
+              const { shingle_score, cosine_score, semantic_score, hybrid_score, ai_score, sentence_analysis } = response.data;
+
+              // Store scores back into the match object for database persistence
+              match.shingle_score = shingle_score;
+              match.cosine_score = cosine_score;
+              match.semantic_score = semantic_score;
+              match.hybrid_score = hybrid_score;
+
+              if (hybrid_score > maxHybrid) {
+                maxHybrid = hybrid_score;
+                bestShingle = shingle_score;
+                bestCosine = cosine_score;
+                bestSemantic = semantic_score;
+                bestAi = ai_score;
+                bestAnalysis = JSON.stringify(sentence_analysis);
+              }
+            }
+          } catch (apiErr) {
+            console.error('Error calling Django NLP API for match:', apiErr.message);
+          }
+        }
+
         await pool.execute(
-          `UPDATE submissions SET plagiarism_score = ?, originality_score = ? WHERE id = ?`,
-          [plagiarismScore, Math.round((100 - plagiarismScore) * 100) / 100, submissionId]
+          `UPDATE submissions SET 
+           plagiarism_score = ?, 
+           originality_score = ?,
+           shingle_score = ?,
+           cosine_score = ?,
+           semantic_score = ?,
+           hybrid_score = ?,
+           ai_score = ?,
+           sentence_analysis = ?
+           WHERE id = ?`,
+          [
+            plagiarismScore,
+            Math.round((100 - plagiarismScore) * 100) / 100,
+            bestShingle,
+            bestCosine,
+            bestSemantic,
+            maxHybrid,
+            bestAi,
+            bestAnalysis,
+            submissionId
+          ]
         );
       } catch (e) {
-        // Columns may not exist
+        console.error('Error updating hybrid scores:', e);
       }
 
       return {

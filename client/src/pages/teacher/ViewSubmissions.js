@@ -32,10 +32,12 @@ import {
   Assessment as StatIcon,
   Groups as ClassIcon,
   Description as ReportIcon,
-  MoreVert as ActionsIcon,
-  Assessment as AssessmentIcon
+  Assessment as AssessmentIcon,
+  Psychology as PsychologyIcon,
+  Compare as CompareIcon
 } from '@mui/icons-material';
 import api from '../../utils/api';
+import ComparisonModal from '../../components/teacher/ComparisonModal';
 
 const ViewSubmissions = () => {
   const [classes, setClasses] = useState([]);
@@ -56,6 +58,7 @@ const ViewSubmissions = () => {
   const [newRoll, setNewRoll] = useState('');
   const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [comparisonOpen, setComparisonOpen] = useState(false);
 
   const fetchClasses = useCallback(async () => {
     try {
@@ -448,10 +451,81 @@ const ViewSubmissions = () => {
                 </Box>
               </Box>
 
+              <Box sx={{ mb: 4 }}>
+                <Typography variant="h6" fontWeight={800} sx={{ mb: 2, borderBottom: '2px solid #f1f5f9', pb: 1 }}>
+                  Hybrid Analysis Breakdown
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={3}>
+                    <Box sx={{ p: 2, bgcolor: '#f0f9ff', borderRadius: 2, textAlign: 'center', border: '1px solid #bae6fd' }}>
+                      <Typography variant="caption" fontWeight={800} color="primary">SHINGLES</Typography>
+                      <Typography variant="h5" fontWeight={900}>{details.submission.shingle_score ?? 0}%</Typography>
+                      <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>Direct Copy</Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={3}>
+                    <Box sx={{ p: 2, bgcolor: '#f5f3ff', borderRadius: 2, textAlign: 'center', border: '1px solid #ddd6fe' }}>
+                      <Typography variant="caption" fontWeight={800} color="secondary">COSINE</Typography>
+                      <Typography variant="h5" fontWeight={900}>{details.submission.cosine_score ?? 0}%</Typography>
+                      <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>Paraphrase</Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={3}>
+                    <Box sx={{ p: 2, bgcolor: '#ecfdf5', borderRadius: 2, textAlign: 'center', border: '1px solid #a7f3d0' }}>
+                      <Typography variant="caption" fontWeight={800} color="success.main">BERT</Typography>
+                      <Typography variant="h5" fontWeight={900}>{details.submission.semantic_score ?? 0}%</Typography>
+                      <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>Semantic</Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={3}>
+                    <Box sx={{ p: 2, bgcolor: '#fff7ed', borderRadius: 2, textAlign: 'center', border: '1px solid #ffedd5' }}>
+                      <Typography variant="caption" fontWeight={800} color="warning.main">HYBRID</Typography>
+                      <Typography variant="h5" fontWeight={900} color="warning.dark">{details.submission.hybrid_score ?? 0}%</Typography>
+                      <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>Final Weighted</Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Box>
+
+              <Box sx={{ mb: 4, p: 2.5, bgcolor: '#fdf2f8', borderRadius: 3, border: '1px solid #fce7f3', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box>
+                  <Typography variant="subtitle2" fontWeight={800} color="#9d174d" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PsychologyIcon fontSize="small" /> AI CONTENT DETECTION
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">Probability of machine-generated text</Typography>
+                </Box>
+                <Box sx={{ textAlign: 'right' }}>
+                  <Typography variant="h4" fontWeight={900} color="#be185d">{details.submission.ai_score ?? 0}%</Typography>
+                  <Chip label={details.submission.ai_score > 50 ? "High Risk" : "Low Risk"} size="small" color={details.submission.ai_score > 50 ? "error" : "success"} sx={{ fontWeight: 800, fontSize: '0.65rem' }} />
+                </Box>
+              </Box>
+
+              <Button
+                fullWidth
+                variant="contained"
+                size="large"
+                startIcon={<CompareIcon />}
+                onClick={() => setComparisonOpen(true)}
+                sx={{
+                  mb: 4,
+                  py: 2,
+                  borderRadius: 3,
+                  fontWeight: 900,
+                  fontSize: '1rem',
+                  background: 'linear-gradient(45deg, #1e293b 30%, #334155 90%)',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  '&:hover': {
+                    background: 'linear-gradient(45deg, #0f172a 30%, #1e293b 90%)',
+                  }
+                }}
+              >
+                VIEW VISUAL HIGHLIGHTING & COMPARISON
+              </Button>
+
               <Grid container spacing={3} sx={{ mb: 4 }}>
                 <Grid item xs={6}>
                   <Box sx={{ p: 2, border: '1px solid #e2e8f0', borderRadius: 2 }}>
-                    <Typography variant="caption" fontWeight={700} color="text.secondary">AI PROBABILITY</Typography>
+                    <Typography variant="caption" fontWeight={700} color="text.secondary">WRITING QUALITY ISSUE</Typography>
                     <Typography variant="h6" fontWeight={800}>{details.submission.plagiarism_score ?? 0}%</Typography>
                   </Box>
                 </Grid>
@@ -587,6 +661,12 @@ const ViewSubmissions = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ComparisonModal
+        open={comparisonOpen}
+        onClose={() => setComparisonOpen(false)}
+        submission={details?.submission}
+      />
     </Box>
   );
 };
