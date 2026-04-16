@@ -19,7 +19,8 @@ import {
   DialogContent,
   DialogActions,
   Grid,
-  CircularProgress
+  CircularProgress,
+  Tooltip
 } from '@mui/material';
 import {
   Visibility as ViewIcon,
@@ -43,6 +44,7 @@ const ViewSubmissions = () => {
   const [classes, setClasses] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [submissions, setSubmissions] = useState([]);
+  const [extensions, setExtensions] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedAssignment, setSelectedAssignment] = useState('');
   const [loading, setLoading] = useState(false);
@@ -59,6 +61,7 @@ const ViewSubmissions = () => {
   const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [comparisonOpen, setComparisonOpen] = useState(false);
+  const [sortConfig, setSortConfig] = useState({ key: 'student_roll_number', direction: 'asc' });
 
   const fetchClasses = useCallback(async () => {
     try {
@@ -90,6 +93,15 @@ const ViewSubmissions = () => {
     }
   }, [selectedAssignment]);
 
+  const fetchExtensions = useCallback(async () => {
+    try {
+      const response = await api.get(`/api/teacher/assignments/${selectedAssignment}/extensions`);
+      setExtensions(response.data.extensions);
+    } catch (error) {
+      console.error('Error fetching extensions:', error);
+    }
+  }, [selectedAssignment]);
+
   useEffect(() => {
     fetchClasses();
   }, [fetchClasses]);
@@ -103,8 +115,9 @@ const ViewSubmissions = () => {
   useEffect(() => {
     if (selectedAssignment) {
       fetchSubmissions();
+      fetchExtensions();
     }
-  }, [selectedAssignment, fetchSubmissions]);
+  }, [selectedAssignment, fetchSubmissions, fetchExtensions]);
 
   const handleViewDetails = async (submission) => {
     setSelectedSubmission(submission);
@@ -232,6 +245,42 @@ const ViewSubmissions = () => {
     }
   };
 
+  const handleRequestSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const sortedSubmissions = React.useMemo(() => {
+    let sortableItems = [...submissions];
+    if (sortConfig.key) {
+      sortableItems.sort((a, b) => {
+        let aVal = a[sortConfig.key];
+        let bVal = b[sortConfig.key];
+
+        // Handle specific keys
+        if (sortConfig.key === 'student_name') {
+          aVal = a.student_name;
+          bVal = b.student_name;
+        } else if (sortConfig.key === 'submitted_at') {
+          aVal = new Date(a.submitted_at);
+          bVal = new Date(b.submitted_at);
+        }
+
+        if (aVal < bVal) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (aVal > bVal) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [submissions, sortConfig]);
+
   const getStatusColor = (status, submission) => {
     if (status === 'accepted' || status === 'checked') return { color: 'success', bg: '#f0fdf4' };
     const similarity = submission?.similarity_score ?? 0;
@@ -318,18 +367,49 @@ const ViewSubmissions = () => {
           <Table stickyHeader>
             <TableHead>
               <TableRow>
-                <TableCell sx={{ fontWeight: 800, bgcolor: '#f1f5f9' }}>ROLL #</TableCell>
-                <TableCell sx={{ fontWeight: 800, bgcolor: '#f1f5f9' }}>STUDENT</TableCell>
-                <TableCell sx={{ fontWeight: 800, bgcolor: '#f1f5f9' }}>STATUS</TableCell>
-                <TableCell sx={{ fontWeight: 800, bgcolor: '#f1f5f9', textAlign: 'center' }}>SIMILARITY</TableCell>
-                <TableCell sx={{ fontWeight: 800, bgcolor: '#f1f5f9', textAlign: 'center' }}>SCORE</TableCell>
+                <TableCell 
+                  sx={{ fontWeight: 800, bgcolor: '#f1f5f9', cursor: 'pointer' }}
+                  onClick={() => handleRequestSort('student_roll_number')}
+                >
+                  ROLL # {sortConfig.key === 'student_roll_number' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                </TableCell>
+                <TableCell 
+                  sx={{ fontWeight: 800, bgcolor: '#f1f5f9', cursor: 'pointer' }}
+                  onClick={() => handleRequestSort('student_name')}
+                >
+                  STUDENT {sortConfig.key === 'student_name' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                </TableCell>
+                <TableCell 
+                  sx={{ fontWeight: 800, bgcolor: '#f1f5f9', cursor: 'pointer' }}
+                  onClick={() => handleRequestSort('status')}
+                >
+                  STATUS {sortConfig.key === 'status' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                </TableCell>
+                <TableCell 
+                  sx={{ fontWeight: 800, bgcolor: '#f1f5f9', cursor: 'pointer' }}
+                  onClick={() => handleRequestSort('submitted_at')}
+                >
+                  SUBMITTED ON {sortConfig.key === 'submitted_at' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                </TableCell>
+                <TableCell 
+                  sx={{ fontWeight: 800, bgcolor: '#f1f5f9', textAlign: 'center', cursor: 'pointer' }}
+                  onClick={() => handleRequestSort('similarity_score')}
+                >
+                  SIMILARITY {sortConfig.key === 'similarity_score' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                </TableCell>
+                <TableCell 
+                  sx={{ fontWeight: 800, bgcolor: '#f1f5f9', textAlign: 'center', cursor: 'pointer' }}
+                  onClick={() => handleRequestSort('score')}
+                >
+                  SCORE {sortConfig.key === 'score' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                </TableCell>
                 <TableCell sx={{ fontWeight: 800, bgcolor: '#f1f5f9', textAlign: 'right' }}>ACTIONS</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {submissions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 10 }}>
+                  <TableCell colSpan={7} align="center" sx={{ py: 10 }}>
                     <StatIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
                     <Typography variant="h6" color="text.secondary">
                       {selectedAssignment ? 'No submissions yet for this assignment.' : 'Please choose a module to start the audit.'}
@@ -337,7 +417,7 @@ const ViewSubmissions = () => {
                   </TableCell>
                 </TableRow>
               ) : (
-                submissions.map((submission) => {
+                sortedSubmissions.map((submission) => {
                   const statusInfo = getStatusColor(submission.status, submission);
                   return (
                     <TableRow key={submission.id} sx={{ '&:hover': { bgcolor: '#f8fafc' } }}>
@@ -371,6 +451,36 @@ const ViewSubmissions = () => {
                             borderRadius: 1
                           }}
                         />
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const assignmentData = assignments.find(a => a.id === selectedAssignment);
+                          const extension = extensions.find(e => e.student_id === submission.student_id);
+                          const subDate = new Date(submission.submitted_at);
+                          const dueDate = assignmentData?.due_date ? new Date(assignmentData.due_date) : null;
+                          const extDate = extension ? new Date(extension.extended_until) : null;
+
+                          let color = 'success.main';
+                          let tooltip = 'Submitted on time';
+
+                          if (dueDate && subDate > dueDate) {
+                            if (extDate && subDate <= extDate) {
+                              color = 'warning.main';
+                              tooltip = `Submitted under extension granted on ${new Date(extension.granted_at).toLocaleDateString()}`;
+                            } else {
+                              color = 'error.main';
+                              tooltip = 'Submitted after deadline';
+                            }
+                          }
+
+                          return (
+                            <Tooltip title={tooltip}>
+                              <Typography variant="body2" fontWeight={700} sx={{ color }}>
+                                {subDate.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </Typography>
+                            </Tooltip>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell align="center">
                         {submission.similarity_score != null ? (
@@ -451,55 +561,6 @@ const ViewSubmissions = () => {
                 </Box>
               </Box>
 
-              <Box sx={{ mb: 4 }}>
-                <Typography variant="h6" fontWeight={800} sx={{ mb: 2, borderBottom: '2px solid #f1f5f9', pb: 1 }}>
-                  Hybrid Analysis Breakdown
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={3}>
-                    <Box sx={{ p: 2, bgcolor: '#f0f9ff', borderRadius: 2, textAlign: 'center', border: '1px solid #bae6fd' }}>
-                      <Typography variant="caption" fontWeight={800} color="primary">SHINGLES</Typography>
-                      <Typography variant="h5" fontWeight={900}>{details.submission.shingle_score ?? 0}%</Typography>
-                      <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>Direct Copy</Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={3}>
-                    <Box sx={{ p: 2, bgcolor: '#f5f3ff', borderRadius: 2, textAlign: 'center', border: '1px solid #ddd6fe' }}>
-                      <Typography variant="caption" fontWeight={800} color="secondary">COSINE</Typography>
-                      <Typography variant="h5" fontWeight={900}>{details.submission.cosine_score ?? 0}%</Typography>
-                      <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>Paraphrase</Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={3}>
-                    <Box sx={{ p: 2, bgcolor: '#ecfdf5', borderRadius: 2, textAlign: 'center', border: '1px solid #a7f3d0' }}>
-                      <Typography variant="caption" fontWeight={800} color="success.main">BERT</Typography>
-                      <Typography variant="h5" fontWeight={900}>{details.submission.semantic_score ?? 0}%</Typography>
-                      <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>Semantic</Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={3}>
-                    <Box sx={{ p: 2, bgcolor: '#fff7ed', borderRadius: 2, textAlign: 'center', border: '1px solid #ffedd5' }}>
-                      <Typography variant="caption" fontWeight={800} color="warning.main">HYBRID</Typography>
-                      <Typography variant="h5" fontWeight={900} color="warning.dark">{details.submission.hybrid_score ?? 0}%</Typography>
-                      <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>Final Weighted</Typography>
-                    </Box>
-                  </Grid>
-                </Grid>
-              </Box>
-
-              <Box sx={{ mb: 4, p: 2.5, bgcolor: '#fdf2f8', borderRadius: 3, border: '1px solid #fce7f3', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Box>
-                  <Typography variant="subtitle2" fontWeight={800} color="#9d174d" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <PsychologyIcon fontSize="small" /> AI CONTENT DETECTION
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">Probability of machine-generated text</Typography>
-                </Box>
-                <Box sx={{ textAlign: 'right' }}>
-                  <Typography variant="h4" fontWeight={900} color="#be185d">{details.submission.ai_score ?? 0}%</Typography>
-                  <Chip label={details.submission.ai_score > 50 ? "High Risk" : "Low Risk"} size="small" color={details.submission.ai_score > 50 ? "error" : "success"} sx={{ fontWeight: 800, fontSize: '0.65rem' }} />
-                </Box>
-              </Box>
-
               <Button
                 fullWidth
                 variant="contained"
@@ -532,7 +593,9 @@ const ViewSubmissions = () => {
                 <Grid item xs={6}>
                   <Box sx={{ p: 2, border: '1px solid #e2e8f0', borderRadius: 2 }}>
                     <Typography variant="caption" fontWeight={700} color="text.secondary">ORIGINALITY</Typography>
-                    <Typography variant="h6" fontWeight={800}>{details.submission.originality_score ?? 100}%</Typography>
+                    <Typography variant="h6" fontWeight={800}>
+                      {details.submission.similarity_score != null ? Math.max(0, 100 - details.submission.similarity_score) : (details.submission.originality_score ?? 100)}%
+                    </Typography>
                   </Box>
                 </Grid>
               </Grid>
@@ -580,7 +643,7 @@ const ViewSubmissions = () => {
                   disabled={details.submission.status === 'rejected'}
                   sx={{ flex: 1, borderRadius: 2, py: 1.5, fontWeight: 800 }}
                 >
-                  Flag Submission
+                  Reject Submission
                 </Button>
               </Box>
 
@@ -592,7 +655,7 @@ const ViewSubmissions = () => {
                   {details.matches.map((match, idx) => (
                     <Paper key={idx} sx={{ p: 2, mt: 2, bgcolor: '#fff6f6', borderLeft: '4px solid #ef4444' }}>
                       <Typography variant="subtitle2" fontWeight={800}>
-                        {match.matched_source_type === 'external' ? 'Web Source Found' : `Match with student: ${match.matched_student_name}`}
+                        {match.matched_source_type === 'external' ? 'Web Source Found' : `Match with student: ${match.matched_student_name || 'Unknown'}`}
                       </Typography>
                       {match.external_source_url && (
                         <Typography variant="caption" sx={{ display: 'block', mb: 1 }}>Source URL: {match.external_source_url}</Typography>
@@ -666,14 +729,10 @@ const ViewSubmissions = () => {
         open={comparisonOpen}
         onClose={() => setComparisonOpen(false)}
         submission={details?.submission}
+        matches={details?.matches}
       />
     </Box>
   );
 };
 
 export default ViewSubmissions;
-
-
-
-
-

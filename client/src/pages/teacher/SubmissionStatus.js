@@ -13,16 +13,24 @@ import {
     TableBody,
     Chip,
     CircularProgress,
-    Container,
     Breadcrumbs,
     Link as MuiLink,
-    Grid
+    Grid,
+    Button,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    IconButton,
+    Tooltip
 } from '@mui/material';
 import {
     Assessment as AssessmentIcon,
     CheckCircle as CheckCircleIcon,
     Pending as PendingIcon,
-    NavigateNext as NavigateNextIcon
+    NavigateNext as NavigateNextIcon,
+    Cancel as CancelIcon,
+    Edit as EditIcon
 } from '@mui/icons-material';
 import api from '../../utils/api';
 
@@ -30,10 +38,19 @@ const SubmissionStatus = () => {
     const [classes, setClasses] = useState([]);
     const [assignments, setAssignments] = useState([]);
     const [statusList, setStatusList] = useState([]);
+    const [extensions, setExtensions] = useState([]);
+    
     const [selectedClass, setSelectedClass] = useState('');
     const [selectedAssignment, setSelectedAssignment] = useState('');
-    const [loading, setLoading] = useState(false);
+    
     const [listLoading, setListLoading] = useState(false);
+    
+    // Extension Modal State
+    const [modalOpen, setModalOpen] = useState(false);
+    const [selectedStudent, setSelectedStudent] = useState(null);
+    const [extensionDate, setExtensionDate] = useState('');
+    const [extensionReason, setExtensionReason] = useState('');
+    const [granting, setGranting] = useState(false);
 
     const fetchClasses = useCallback(async () => {
         try {
@@ -67,6 +84,16 @@ const SubmissionStatus = () => {
         }
     }, [selectedAssignment]);
 
+    const fetchExtensions = useCallback(async () => {
+        if (!selectedAssignment) return;
+        try {
+            const response = await api.get(`/api/teacher/assignments/${selectedAssignment}/extensions`);
+            setExtensions(response.data.extensions);
+        } catch (error) {
+            console.error('Error fetching extensions:', error);
+        }
+    }, [selectedAssignment]);
+
     useEffect(() => {
         fetchClasses();
     }, [fetchClasses]);
@@ -75,11 +102,82 @@ const SubmissionStatus = () => {
         fetchAssignments();
         setSelectedAssignment('');
         setStatusList([]);
+        setExtensions([]);
     }, [selectedClass, fetchAssignments]);
 
     useEffect(() => {
         fetchStatusList();
-    }, [selectedAssignment, fetchStatusList]);
+        fetchExtensions();
+    }, [selectedAssignment, fetchStatusList, fetchExtensions]);
+
+    const handleOpenExtensionModal = (student) => {
+        setSelectedStudent(student);
+        setExtensionDate('');
+        setExtensionReason('');
+        setModalOpen(true);
+    };
+
+    const handleGrantExtension = async () => {
+        if (!extensionDate) return alert('Please select a valid date/time');
+        
+        setGranting(true);
+        try {
+            // Format to standard ISO string or MySQL datetime compatible
+            const isoString = new Date(extensionDate).toISOString().slice(0, 19).replace('T', ' ');
+            
+            await api.post(`/api/teacher/assignments/${selectedAssignment}/extensions`, {
+                student_id: selectedStudent.student_id,
+                extended_until: isoString,
+                reason: extensionReason
+            });
+            
+            setModalOpen(false);
+            fetchExtensions(); // Refresh extensions list
+        } catch (error) {
+            console.error('Error granting extension:', error);
+            alert('Failed to grant extension');
+        } finally {
+            setGranting(false);
+        }
+    };
+
+    const handleRevokeExtension = async (extensionId) => {
+        if (!window.confirm('Are you sure you want to revoke this extension?')) return;
+        
+        try {
+            await api.delete(`/api/teacher/extensions/${extensionId}`);
+            fetchExtensions();
+        } catch (error) {
+            console.error('Error revoking extension:', error);
+            alert('Failed to revoke extension');
+        }
+    };
+
+    const assignment = assignments.find(a => a.id === selectedAssignment);
+
+    const getStudentStatusInfo = (row) => {
+        const extension = extensions.find(e => e.student_id === row.student_id);
+    
+        if (row.status === 'Submitted') {
+            const isLate = assignment?.due_date && new Date(row.submitted_at) > new Date(assignment.due_date);
+            const validExtension = extension && new Date(row.submitted_at) <= new Date(extension.extended_until);
+            
+            return {
+                label: 'SUBMITTED',
+                color: (isLate && !validExtension) ? 'error' : (isLate && validExtension ? 'warning' : 'success'),
+                icon: <CheckCircleIcon />
+            };
+        }
+        
+        if (!assignment?.due_date) return { label: 'PENDING', color: 'default', icon: <PendingIcon /> };
+        
+        const effectiveDeadline = extension ? new Date(extension.extended_until) : new Date(assignment.due_date);
+        
+        if (new Date() > effectiveDeadline) {
+            return { label: 'DEADLINE PASSED', color: 'error', icon: <CancelIcon /> };
+        }
+        return { label: 'PENDING', color: 'default', icon: <PendingIcon /> };
+    };
 
     return (
         <Box sx={{ p: 4 }}>
@@ -144,36 +242,58 @@ const SubmissionStatus = () => {
                             <TableRow>
                                 <TableCell sx={{ fontWeight: 700, color: 'text.secondary' }}>ROLL #</TableCell>
                                 <TableCell sx={{ fontWeight: 700, color: 'text.secondary' }}>STUDENT NAME</TableCell>
-                                <TableCell sx={{ fontWeight: 700, color: 'text.secondary' }}>EMAIL</TableCell>
                                 <TableCell sx={{ fontWeight: 700, color: 'text.secondary', textAlign: 'center' }}>STATUS</TableCell>
                                 <TableCell sx={{ fontWeight: 700, color: 'text.secondary' }}>SUBMITTED AT</TableCell>
+                                <TableCell sx={{ fontWeight: 700, color: 'text.secondary', textAlign: 'right' }}>ACTIONS</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {statusList.map((row) => (
-                                <TableRow key={row.student_id} hover>
-                                    <TableCell sx={{ fontWeight: 800 }}>{row.roll_number || 'N/A'}</TableCell>
-                                    <TableCell sx={{ fontWeight: 600 }}>{row.full_name}</TableCell>
-                                    <TableCell color="text.secondary">{row.email}</TableCell>
-                                    <TableCell sx={{ textAlign: 'center' }}>
-                                        <Chip
-                                            icon={row.status === 'Submitted' ? <CheckCircleIcon /> : <PendingIcon />}
-                                            label={row.status.toUpperCase()}
-                                            size="small"
-                                            sx={{
-                                                fontWeight: 800,
-                                                fontSize: '0.7rem',
-                                                bgcolor: row.status === 'Submitted' ? '#ecfdf5' : '#f1f5f9',
-                                                color: row.status === 'Submitted' ? '#059669' : '#64748b',
-                                                border: `1px solid ${row.status === 'Submitted' ? '#a7f3d0' : '#e2e8f0'}`
-                                            }}
-                                        />
-                                    </TableCell>
-                                    <TableCell sx={{ color: 'text.secondary', fontSize: '0.85rem' }}>
-                                        {row.submitted_at ? new Date(row.submitted_at).toLocaleString() : '-'}
-                                    </TableCell>
-                                </TableRow>
-                            ))}
+                            {statusList.map((row) => {
+                                const statusInfo = getStudentStatusInfo(row);
+                                const extension = extensions.find(e => e.student_id === row.student_id);
+                                
+                                return (
+                                    <TableRow key={row.student_id} hover>
+                                        <TableCell sx={{ fontWeight: 800 }}>{row.roll_number || 'N/A'}</TableCell>
+                                        <TableCell>
+                                            <Typography fontWeight={600}>{row.full_name}</Typography>
+                                            <Typography variant="caption" color="text.secondary">{row.email}</Typography>
+                                        </TableCell>
+                                        <TableCell sx={{ textAlign: 'center' }}>
+                                            <Chip
+                                                icon={statusInfo.icon}
+                                                label={statusInfo.label}
+                                                size="small"
+                                                color={statusInfo.color !== 'default' ? statusInfo.color : 'default'}
+                                                sx={{
+                                                    fontWeight: 800,
+                                                    fontSize: '0.7rem'
+                                                }}
+                                            />
+                                        </TableCell>
+                                        <TableCell sx={{ color: 'text.secondary', fontSize: '0.85rem' }}>
+                                            {row.submitted_at ? new Date(row.submitted_at).toLocaleString() : '-'}
+                                        </TableCell>
+                                        <TableCell align="right">
+                                            {statusInfo.label === 'DEADLINE PASSED' && !extension && (
+                                                <Button size="small" variant="outlined" startIcon={<EditIcon />} onClick={() => handleOpenExtensionModal(row)}>
+                                                    Grant Ext.
+                                                </Button>
+                                            )}
+                                            {extension && row.status !== 'Submitted' && (
+                                                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', justifyContent: 'flex-end' }}>
+                                                    <Tooltip title={`Extended to: ${new Date(extension.extended_until).toLocaleString()}`}>
+                                                        <Chip size="small" color="warning" label="Extended" />
+                                                    </Tooltip>
+                                                    <IconButton size="small" color="error" onClick={() => handleRevokeExtension(extension.id)}>
+                                                        <CancelIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Box>
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
                         </TableBody>
                     </Table>
                 </TableContainer>
@@ -187,9 +307,43 @@ const SubmissionStatus = () => {
                     <Typography color="text.secondary" fontWeight={600}>Please select a class and an assignment to view status.</Typography>
                 </Box>
             )}
+
+            {/* Grant Extension Modal */}
+            <Dialog open={modalOpen} onClose={() => setModalOpen(false)} PaperProps={{ sx: { borderRadius: 3, p: 1, minWidth: 400 } }}>
+                <DialogTitle sx={{ fontWeight: 800 }}>Grant Deadline Extension</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary' }}>
+                        Extending deadline for <b>{selectedStudent?.full_name}</b>.
+                    </Typography>
+                    
+                    <TextField
+                        fullWidth
+                        type="datetime-local"
+                        label="New Deadline (Extended Until)"
+                        InputLabelProps={{ shrink: true }}
+                        value={extensionDate}
+                        onChange={(e) => setExtensionDate(e.target.value)}
+                        sx={{ mb: 3 }}
+                    />
+                    
+                    <TextField
+                        fullWidth
+                        multiline
+                        rows={3}
+                        label="Reason for Extension (Optional)"
+                        value={extensionReason}
+                        onChange={(e) => setExtensionReason(e.target.value)}
+                    />
+                </DialogContent>
+                <DialogActions sx={{ p: 3 }}>
+                    <Button onClick={() => setModalOpen(false)} sx={{ fontWeight: 700 }}>Cancel</Button>
+                    <Button variant="contained" color="warning" onClick={handleGrantExtension} disabled={granting} sx={{ fontWeight: 800, borderRadius: 2 }}>
+                        {granting ? <CircularProgress size={24} /> : 'Confirm Extension'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };
-
 
 export default SubmissionStatus;

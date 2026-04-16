@@ -9,13 +9,18 @@ import {
   Box,
   Alert,
   CircularProgress,
+  IconButton,
+  InputAdornment,
 } from '@mui/material';
 import SchoolRoundedIcon from '@mui/icons-material/SchoolRounded';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -166,17 +171,34 @@ const Login = () => {
                   required
                   fullWidth
                   label="Password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          aria-label="toggle password visibility"
+                          onClick={() => setShowPassword(!showPassword)}
+                          onMouseDown={(e) => e.preventDefault()}
+                          edge="end"
+                          size="small"
+                        >
+                          {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
                   sx={{ mb: 1 }}
                 />
 
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-                  <Typography variant="caption" color="primary" sx={{ cursor: 'pointer', fontWeight: 600 }}>
-                    Forgot password?
-                  </Typography>
+                  <Link to="/forgot-password" style={{ textDecoration: 'none' }}>
+                    <Typography variant="caption" color="primary" sx={{ cursor: 'pointer', fontWeight: 600 }}>
+                      Forgot password?
+                    </Typography>
+                  </Link>
                 </Box>
 
                 <Button
@@ -195,7 +217,7 @@ const Login = () => {
                     Don&apos;t have an account?{' '}
                     <Link to="/register" style={{ textDecoration: 'none' }}>
                       <Typography component="span" variant="body2" color="primary" fontWeight={700}>
-                        Join the community
+                        Register here
                       </Typography>
                     </Link>
                   </Typography>
@@ -206,7 +228,6 @@ const Login = () => {
         </Container>
       </Box>
     </Box>
-
   );
 };
 

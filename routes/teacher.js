@@ -249,6 +249,152 @@ router.get('/assignments/:assignmentId/submissions', async (req, res) => {
   }
 });
 
+// Get all students status list for an assignment (Submission Tracking view)
+router.get('/assignments/:assignmentId/status-list', async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+
+    // Verify teacher owns the assignment
+    const [assignments] = await pool.execute(
+      'SELECT class_id, teacher_id FROM assignments WHERE id = ?',
+      [assignmentId]
+    );
+
+    if (assignments.length === 0) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    if (assignments[0].teacher_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const classId = assignments[0].class_id;
+
+    // Get all students in the class joined with their submission for this assignment
+    const [statusList] = await pool.execute(
+      `SELECT u.id as student_id, u.full_name, u.email, u.roll_number,
+              s.id as submission_id, s.submitted_at, 
+              IF(s.id IS NOT NULL, 'Submitted', 'Pending') as status
+       FROM class_students cs
+       JOIN users u ON cs.student_id = u.id
+       LEFT JOIN submissions s ON s.assignment_id = ? AND s.student_id = u.id
+       WHERE cs.class_id = ?
+       ORDER BY u.roll_number, u.full_name`,
+      [assignmentId, classId]
+    );
+
+    res.json({ statusList });
+  } catch (error) {
+    console.error('Error fetching status list:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get all extensions for an assignment
+router.get('/assignments/:assignmentId/extensions', async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+
+    // Verify teacher owns the assignment
+    const [assignments] = await pool.execute(
+      'SELECT teacher_id FROM assignments WHERE id = ?',
+      [assignmentId]
+    );
+
+    if (assignments.length === 0) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    if (assignments[0].teacher_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const [extensions] = await pool.execute(
+      `SELECT e.*, u.full_name as student_name, u.roll_number as student_roll_number 
+       FROM submission_extensions e
+       JOIN users u ON e.student_id = u.id
+       WHERE e.assignment_id = ?`,
+      [assignmentId]
+    );
+
+    res.json({ extensions });
+  } catch (error) {
+    console.error('Error fetching extensions:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Grant or update an extension
+router.post('/assignments/:assignmentId/extensions', async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+    const { student_id, extended_until, reason } = req.body;
+    const teacher_id = req.user.id;
+
+    if (!student_id || !extended_until) {
+      return res.status(400).json({ message: 'student_id and extended_until are required' });
+    }
+
+    // Verify teacher owns the assignment
+    const [assignments] = await pool.execute(
+      'SELECT teacher_id FROM assignments WHERE id = ?',
+      [assignmentId]
+    );
+
+    if (assignments.length === 0) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    if (assignments[0].teacher_id !== teacher_id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Insert or update
+    await pool.execute(
+      `INSERT INTO submission_extensions (assignment_id, student_id, granted_by, extended_until, reason) 
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE extended_until = ?, reason = ?, granted_at = CURRENT_TIMESTAMP`,
+      [assignmentId, student_id, teacher_id, extended_until, reason || null, extended_until, reason || null]
+    );
+
+    res.json({ message: 'Extension granted successfully' });
+  } catch (error) {
+    console.error('Error granting extension:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Revoke an extension
+router.delete('/extensions/:extensionId', async (req, res) => {
+  try {
+    const { extensionId } = req.params;
+    const teacher_id = req.user.id;
+
+    // Verify teacher owns the assignment for this extension
+    const [extensions] = await pool.execute(
+      `SELECT e.id, a.teacher_id FROM submission_extensions e
+       JOIN assignments a ON e.assignment_id = a.id
+       WHERE e.id = ?`,
+      [extensionId]
+    );
+
+    if (extensions.length === 0) {
+      return res.status(404).json({ message: 'Extension not found' });
+    }
+
+    if (extensions[0].teacher_id !== teacher_id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    await pool.execute('DELETE FROM submission_extensions WHERE id = ?', [extensionId]);
+
+    res.json({ message: 'Extension revoked successfully' });
+  } catch (error) {
+    console.error('Error revoking extension:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Get submission status for ALL students in a class for a specific assignment
 router.get('/assignments/:assignmentId/status-list', async (req, res) => {
   try {
@@ -673,6 +819,73 @@ router.get('/assignments/:assignmentId/export', async (req, res) => {
   } catch (error) {
     console.error('Error exporting scores:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Delete a class and all associated data
+router.delete('/classes/:classId', async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const { classId } = req.params;
+    const teacher_id = req.user.id;
+
+    // Verify teacher owns the class or is admin
+    const [classes] = await pool.execute(
+      'SELECT id FROM classes WHERE id = ? AND (teacher_id = ? OR ? = "admin")',
+      [classId, teacher_id, req.user.role]
+    );
+
+    if (classes.length === 0) {
+      return res.status(404).json({ message: 'Class not found or access denied' });
+    }
+
+    await connection.beginTransaction();
+
+    // 1. Delete submission extensions for all assignments in the class
+    await connection.execute(
+      `DELETE se FROM submission_extensions se
+       JOIN assignments a ON se.assignment_id = a.id
+       WHERE a.class_id = ?`,
+      [classId]
+    );
+
+    // 2. Delete submissions for all assignments (cascades to plagiarism_matches)
+    // We should also delete physical files if they exist
+    const [submissions] = await connection.execute(
+      `SELECT s.file_path FROM submissions s
+       JOIN assignments a ON s.assignment_id = a.id
+       WHERE a.class_id = ?`,
+      [classId]
+    );
+
+    const fs = require('fs').promises;
+    for (const sub of submissions) {
+      if (sub.file_path) {
+        await fs.unlink(sub.file_path).catch(err => console.error(`Failed to delete file ${sub.file_path}:`, err));
+      }
+    }
+
+    await connection.execute(
+      `DELETE s FROM submissions s
+       JOIN assignments a ON s.assignment_id = a.id
+       WHERE a.class_id = ?`,
+      [classId]
+    );
+
+    // 3. Delete assignments for the class
+    await connection.execute('DELETE FROM assignments WHERE class_id = ?', [classId]);
+
+    // 4. Delete the class (cascades to class_students)
+    await connection.execute('DELETE FROM classes WHERE id = ?', [classId]);
+
+    await connection.commit();
+    res.json({ message: 'Class and all associated data deleted successfully' });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error deleting class:', error);
+    res.status(500).json({ message: 'Server error' });
+  } finally {
+    connection.release();
   }
 });
 

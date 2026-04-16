@@ -7,6 +7,7 @@ const { authenticate } = require('../middleware/auth');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const emailService = require('../services/emailService');
 
 const router = express.Router();
 
@@ -274,6 +275,116 @@ router.put('/update', authenticate, upload.single('profile_picture'), [
       try { fs.unlinkSync(req.file.path); } catch (e) { }
     }
     console.error('Update profile error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
+// Request Password Reset OTP
+router.post('/forgot-password', [
+  body('email').isEmail().withMessage('Valid email is required')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { email } = req.body;
+
+    // Find user
+    const [users] = await pool.execute(
+      'SELECT id, email, full_name FROM users WHERE email = ?',
+      [email]
+    );
+
+    if (users.length === 0) {
+      // Don't reveal if user exists or not for security, just send success
+      return res.json({ message: 'If your email is registered, you will receive an OTP shortly.' });
+    }
+
+    const user = users[0];
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Set expiry to 10 minutes from now
+    const expiryTime = new Date();
+    expiryTime.setMinutes(expiryTime.getMinutes() + 10);
+    
+    // Format for MySQL datetime
+    const mysqlExpiry = expiryTime.toISOString().slice(0, 19).replace('T', ' ');
+
+    // Save to database
+    await pool.execute(
+      'UPDATE users SET reset_otp = ?, reset_otp_expires = ? WHERE id = ?',
+      [otp, mysqlExpiry, user.id]
+    );
+
+    // Send email
+    const emailSent = await emailService.sendOtpEmail(user.email, otp);
+    
+    if (emailSent) {
+      res.json({ message: 'OTP sent successfully to your email.' });
+    } else {
+      res.status(500).json({ message: 'Failed to send OTP email. Please try again later.' });
+    }
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Verify OTP and Reset Password
+router.post('/reset-password', [
+  body('email').isEmail().withMessage('Valid email is required'),
+  body('otp').isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits'),
+  body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { email, otp, newPassword } = req.body;
+
+    // Find user and check OTP
+    const [users] = await pool.execute(
+      'SELECT id, reset_otp, reset_otp_expires FROM users WHERE email = ?',
+      [email]
+    );
+
+    if (users.length === 0) {
+      return res.status(400).json({ message: 'Invalid request' });
+    }
+
+    const user = users[0];
+
+    // Check if OTP matches
+    if (!user.reset_otp || user.reset_otp !== otp) {
+      return res.status(400).json({ message: 'Invalid OTP' });
+    }
+
+    // Check if OTP is expired
+    const now = new Date();
+    const expiry = new Date(user.reset_otp_expires);
+    if (now > expiry) {
+      return res.status(400).json({ message: 'OTP has expired. Please request a new one.' });
+    }
+
+    // OTP is valid, hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password and clear OTP fields
+    await pool.execute(
+      'UPDATE users SET hashed_password = ?, reset_otp = NULL, reset_otp_expires = NULL WHERE id = ?',
+      [hashedPassword, user.id]
+    );
+
+    res.json({ message: 'Password reset successfully. You can now login.' });
+  } catch (error) {
+    console.error('Reset password error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

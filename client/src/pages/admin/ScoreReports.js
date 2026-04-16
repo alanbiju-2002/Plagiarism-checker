@@ -157,8 +157,8 @@ const ScoreReports = () => {
                     </Typography>
                   </TableCell>
                   <TableCell align="center">
-                    <Typography variant="body2" fontWeight={900} sx={{ color: score.originality_score > 80 ? 'success.main' : 'text.primary' }}>
-                      {score.originality_score != null ? `${score.originality_score}%` : '---'}
+                    <Typography variant="body2" fontWeight={900} sx={{ color: (score.similarity_score != null ? Math.max(0, 100 - score.similarity_score) : score.originality_score) > 80 ? 'success.main' : 'text.primary' }}>
+                      {score.similarity_score != null ? `${Math.max(0, 100 - score.similarity_score)}%` : (score.originality_score != null ? `${score.originality_score}%` : '---')}
                     </Typography>
                   </TableCell>
                   <TableCell>

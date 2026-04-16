@@ -27,6 +27,65 @@ import {
 } from '@mui/icons-material';
 import api from '../../utils/api';
 
+const DeadlineBadge = ({ dueDate, extensionDate }) => {
+  const [timeLeft, setTimeLeft] = useState('');
+  const [status, setStatus] = useState({ label: '', color: '' });
+
+  const calculateStatus = useCallback(() => {
+    const now = new Date();
+    const deadline = extensionDate ? new Date(extensionDate) : (dueDate ? new Date(dueDate) : null);
+    
+    if (!deadline) return;
+
+    const diff = deadline - now;
+    
+    if (diff <= 0) {
+      setStatus({ label: 'Closed', color: 'error' });
+      setTimeLeft('Submission period over');
+      return;
+    }
+
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(hours / 24);
+    
+    if (days > 0) {
+      setStatus({ label: 'Open', color: 'success' });
+      setTimeLeft(`Closes in ${days}d ${hours % 24}h`);
+    } else {
+      setStatus({ label: 'Due Today', color: 'warning' });
+      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      setTimeLeft(`Closes in ${hours}h ${mins}m`);
+    }
+  }, [dueDate, extensionDate]);
+
+  useEffect(() => {
+    calculateStatus();
+    const timer = setInterval(calculateStatus, 60000);
+    return () => clearInterval(timer);
+  }, [calculateStatus]);
+
+  if (!status.label) return null;
+
+  return (
+    <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+      <Chip 
+        label={status.label} 
+        size="small" 
+        color={status.color} 
+        sx={{ fontWeight: 800, borderRadius: 1 }} 
+      />
+      <Typography variant="caption" fontWeight={700} color={`${status.color}.main`}>
+        {extensionDate ? `Extended - ${timeLeft}` : timeLeft}
+      </Typography>
+      {extensionDate && (
+        <Typography variant="caption" sx={{ width: '100%', color: 'warning.main', fontWeight: 800 }}>
+          New Deadline: {new Date(extensionDate).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+        </Typography>
+      )}
+    </Box>
+  );
+};
+
 const MyAssignments = () => {
   const [searchParams] = useSearchParams();
   const classId = searchParams.get('classId');
@@ -186,53 +245,74 @@ const MyAssignments = () => {
                       {assignment.description || 'No additional instructions provided.'}
                     </Typography>
 
-                    <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <EventIcon sx={{ color: 'text.disabled', fontSize: 18 }} />
-                        <Typography variant="caption" fontWeight={600} color="text.secondary">
-                          DUE: {assignment.due_date ? new Date(assignment.due_date).toLocaleDateString(undefined, { dateStyle: 'medium' }) : 'No Due Date'}
-                        </Typography>
-                      </Box>
-                      {assignment.submission_status && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <CheckIcon sx={{ color: 'success.main', fontSize: 18 }} />
-                          <Typography variant="caption" fontWeight={600} color="success.main">
-                            ALREADY SUBMITTED
-                          </Typography>
+                      <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                        <Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <EventIcon sx={{ color: 'text.disabled', fontSize: 18 }} />
+                            <Typography variant="caption" fontWeight={600} color="text.secondary">
+                              DUE: {assignment.due_date ? new Date(assignment.due_date).toLocaleDateString(undefined, { dateStyle: 'medium' }) : 'No Due Date'}
+                            </Typography>
+                          </Box>
+                          <DeadlineBadge dueDate={assignment.due_date} extensionDate={assignment.extended_until} />
                         </Box>
-                      )}
+                        {assignment.submission_status && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <CheckIcon sx={{ color: 'success.main', fontSize: 18 }} />
+                            <Typography variant="caption" fontWeight={600} color="success.main">
+                              ALREADY SUBMITTED
+                            </Typography>
+                          </Box>
+                        )}
+                      </Box>
+                    </CardContent>
+                    <Box sx={{ p: 3, pt: 0, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+                      {(() => {
+                        const isPast = (() => {
+                          const now = new Date();
+                          const deadline = assignment.extended_until ? new Date(assignment.extended_until) : (assignment.due_date ? new Date(assignment.due_date) : null);
+                          return deadline && now > deadline;
+                        })();
+
+                        if (!assignment.submission_status) {
+                          return (
+                            <Button
+                              variant="contained"
+                              disabled={isPast}
+                              startIcon={<UploadIcon />}
+                              onClick={() => handleFileSelect(assignment)}
+                              sx={{ borderRadius: 2, px: 4, fontWeight: 700 }}
+                            >
+                              {isPast ? 'Submission Closed' : 'Submit Work'}
+                            </Button>
+                          );
+                        }
+
+                        if (assignment.submission_status === 'rejected') {
+                          return (
+                            <Button
+                              variant="outlined"
+                              color="error"
+                              disabled={isPast}
+                              startIcon={<RefreshIcon />}
+                              onClick={() => handleResubmit(assignment)}
+                              sx={{ borderRadius: 2, fontWeight: 700 }}
+                            >
+                              {isPast ? 'Deadline Passed (Flagged)' : 'Resubmit Version'}
+                            </Button>
+                          );
+                        }
+
+                        return (
+                          <Button
+                            variant="soft"
+                            disabled
+                            sx={{ borderRadius: 2, bgcolor: '#f1f5f9', color: 'text.disabled' }}
+                          >
+                            View Receipt
+                          </Button>
+                        );
+                      })()}
                     </Box>
-                  </CardContent>
-                  <Box sx={{ p: 3, pt: 0, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-                    {!assignment.submission_status ? (
-                      <Button
-                        variant="contained"
-                        startIcon={<UploadIcon />}
-                        onClick={() => handleFileSelect(assignment)}
-                        sx={{ borderRadius: 2, px: 4, fontWeight: 700 }}
-                      >
-                        Submit Work
-                      </Button>
-                    ) : assignment.submission_status === 'rejected' ? (
-                      <Button
-                        variant="outlined"
-                        color="error"
-                        startIcon={<RefreshIcon />}
-                        onClick={() => handleResubmit(assignment)}
-                        sx={{ borderRadius: 2, fontWeight: 700 }}
-                      >
-                        Resubmit Version
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="soft"
-                        disabled
-                        sx={{ borderRadius: 2, bgcolor: '#f1f5f9', color: 'text.disabled' }}
-                      >
-                        View Receipt
-                      </Button>
-                    )}
-                  </Box>
                 </Card>
               </Grid>
             );

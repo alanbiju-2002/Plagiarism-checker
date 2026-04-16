@@ -1,5 +1,6 @@
 const pool = require('../config/database');
 const axios = require('axios');
+const stringSimilarity = require('string-similarity');
 const emailService = require('./emailService');
 
 // Optional: spell checker for plagiarism score (spelling + AI, etc.)
@@ -30,7 +31,9 @@ class PlagiarismService {
   }
 
   /**
-   * Calculate similarity between two texts (existing – copy/similarity detection)
+   * Calculate similarity between two texts using Jaccard Similarity on character bigrams.
+   * This is more conservative than the Dice coefficient (standard string-similarity).
+   * Formula: J = Dice / (2 - Dice)
    */
   calculateSimilarity(text1, text2) {
     if (!text1 || !text2) return 0;
@@ -40,8 +43,15 @@ class PlagiarismService {
 
     if (normalized1.length === 0 || normalized2.length === 0) return 0;
 
-    const similarity = stringSimilarity.compareTwoStrings(normalized1, normalized2);
-    return Math.round(similarity * 100 * 100) / 100;
+    // stringSimilarity.compareTwoStrings returns the Dice coefficient
+    const diceSimilarity = stringSimilarity.compareTwoStrings(normalized1, normalized2);
+    
+    // Convert Dice to Jaccard: J = D / (2 - D)
+    const jaccardSimilarity = diceSimilarity > 0 
+      ? diceSimilarity / (2 - diceSimilarity) 
+      : 0;
+
+    return Math.round(jaccardSimilarity * 100 * 100) / 100;
   }
 
   /**
@@ -324,7 +334,7 @@ class PlagiarismService {
            WHERE id = ?`,
           [
             plagiarismScore,
-            Math.round((100 - plagiarismScore) * 100) / 100,
+            Math.round((100 - overallMaxSimilarity) * 100) / 100,
             bestShingle,
             bestCosine,
             bestSemantic,

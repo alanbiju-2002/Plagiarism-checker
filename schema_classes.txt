@@ -1,0 +1,7 @@
+Columns in classes table:
+- id (int)
+- class_name (varchar(255))
+- class_code (varchar(20))
+- teacher_id (int)
+- description (text)
+- created_at (timestamp)

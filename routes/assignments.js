@@ -63,8 +63,25 @@ router.post('/:assignmentId/submit', authenticate, upload.single('file'), async 
     );
 
     if (assignments.length === 0) {
-      await fs.unlink(req.file.path);
+      await fs.unlink(req.file.path).catch(() => {});
       return res.status(404).json({ message: 'Assignment not found or not enrolled' });
+    }
+
+    const assignment = assignments[0];
+    if (assignment.due_date) {
+      const [extensions] = await pool.execute(
+        'SELECT extended_until FROM submission_extensions WHERE assignment_id = ? AND student_id = ?',
+        [assignmentId, student_id]
+      );
+      
+      const effectiveDeadline = extensions.length > 0 
+        ? new Date(extensions[0].extended_until) 
+        : new Date(assignment.due_date);
+
+      if (new Date() > effectiveDeadline) {
+        await fs.unlink(req.file.path).catch(() => {});
+        return res.status(403).json({ message: 'Submission deadline has passed' });
+      }
     }
 
     // Check if already submitted

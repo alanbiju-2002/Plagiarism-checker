@@ -22,6 +22,7 @@ import {
   Key as KeyIcon,
   Add as AddIcon,
   School as SchoolIcon,
+  ExitToApp as LeaveIcon,
 } from '@mui/icons-material';
 import api from '../../utils/api';
 
@@ -59,6 +60,18 @@ const MyClasses = () => {
       fetchClasses();
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to join class');
+    }
+  };
+
+  const handleLeaveClass = async (classItem) => {
+    if (window.confirm(`Are you sure you want to leave the class "${classItem.class_name}"?`)) {
+      try {
+        await api.delete(`/api/student/classes/${classItem.id}/leave`);
+        setSuccess('Successfully left the class');
+        fetchClasses();
+      } catch (error) {
+        setError(error.response?.data?.message || 'Failed to leave class');
+      }
     }
   };
 
@@ -190,6 +203,22 @@ const MyClasses = () => {
                     }}
                   >
                     Enter Classroom
+                  </Button>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    color="error"
+                    startIcon={<LeaveIcon fontSize="small" />}
+                    onClick={() => handleLeaveClass(classItem)}
+                    sx={{
+                      mt: 1.5,
+                      borderRadius: 2,
+                      fontWeight: 700,
+                      py: 1,
+                      borderStyle: 'dashed'
+                    }}
+                  >
+                    Leave Class
                   </Button>
                 </CardActions>
               </Card>

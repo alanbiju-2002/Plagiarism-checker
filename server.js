@@ -2,6 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
+const http = require('http');
+const { Server } = require('socket.io');
+const jwt = require('jsonwebtoken');
 
 dotenv.config();
 
@@ -27,6 +30,43 @@ pool.query('SELECT 1').then(() => {
   console.error('Database connection failed:', err);
 });
 
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
+
+// Socket.io Middleware for JWT
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token;
+  if (!token) {
+    console.log('--- SOCKET AUTH FAILED: No token ---');
+    return next(new Error("Authentication error"));
+  }
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_super_secret_jwt_key_change_this_in_production');
+    socket.user = decoded;
+    next();
+  } catch (err) {
+    console.log('--- SOCKET AUTH FAILED: Invalid token ---');
+    next(new Error("Authentication error"));
+  }
+});
+
+// Import socket handlers
+const registerChatHandlers = require('./socket/chatHandlers');
+
+io.on('connection', (socket) => {
+  console.log(`User connected to socket: ${socket.user.id} (${socket.user.role})`);
+  registerChatHandlers(io, socket);
+  
+  socket.on('disconnect', () => {
+    console.log(`User disconnected from socket: ${socket.user.id}`);
+  });
+});
+
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/admin', require('./routes/admin'));
@@ -34,6 +74,7 @@ app.use('/api/teacher', require('./routes/teacher'));
 app.use('/api/student', require('./routes/student'));
 app.use('/api/assignments', require('./routes/assignments'));
 app.use('/api/plagiarism', require('./routes/plagiarism'));
+app.use('/api/chat', require('./routes/chat'));
 
 app.get('/api/test', (req, res) => {
   res.json({ message: 'API is working' });
@@ -81,7 +122,7 @@ if (process.env.NODE_ENV === 'production') {
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 

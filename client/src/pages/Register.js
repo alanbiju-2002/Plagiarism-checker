@@ -10,8 +10,12 @@ import {
   Alert,
   MenuItem,
   CircularProgress,
+  IconButton,
+  InputAdornment,
 } from '@mui/material';
 import SchoolRoundedIcon from '@mui/icons-material/SchoolRounded';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { useAuth } from '../context/AuthContext';
 
 const Register = () => {
@@ -25,6 +29,7 @@ const Register = () => {
   });
   const [profilePic, setProfilePic] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -226,9 +231,24 @@ const Register = () => {
                   fullWidth
                   label="Secure Password"
                   name="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={formData.password}
                   onChange={handleChange}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          aria-label="toggle password visibility"
+                          onClick={() => setShowPassword(!showPassword)}
+                          onMouseDown={(e) => e.preventDefault()}
+                          edge="end"
+                          size="small"
+                        >
+                          {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
                   sx={{ gridColumn: { sm: 'span 2' } }}
                 />
               </Box>

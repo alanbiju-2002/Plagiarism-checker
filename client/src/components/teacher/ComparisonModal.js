@@ -14,7 +14,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
-const ComparisonModal = ({ open, onClose, submission }) => {
+const ComparisonModal = ({ open, onClose, submission, matches }) => {
     if (!submission) return null;
 
     const sentenceAnalysis = submission.sentence_analysis ?
@@ -66,7 +66,7 @@ const ComparisonModal = ({ open, onClose, submission }) => {
             <DialogContent dividers sx={{ p: 0 }}>
                 <Grid container sx={{ height: '100%' }}>
                     {/* Left Side: Student Submission */}
-                    <Grid item xs={12} md={12} sx={{ p: 3, overflowY: 'auto', bgcolor: '#fff' }}>
+                    <Grid item xs={12} md={matches && matches.length > 0 ? 6 : 12} sx={{ p: 3, overflowY: 'auto', bgcolor: '#fff', borderRight: '1px solid #e2e8f0' }}>
                         <Typography variant="subtitle2" color="text.secondary" gutterBottom fontWeight={700}>
                             STUDENT SUBMISSION (HIGHLIGHTED)
                         </Typography>
@@ -103,6 +103,29 @@ const ComparisonModal = ({ open, onClose, submission }) => {
                             </Box>
                         </Box>
                     </Grid>
+
+                    {/* Right Side: Matched Sources text */}
+                    {matches && matches.length > 0 && (
+                        <Grid item xs={12} md={6} sx={{ p: 3, overflowY: 'auto', bgcolor: '#f8fafc' }}>
+                            <Typography variant="subtitle2" color="text.secondary" gutterBottom fontWeight={700}>
+                                MATCHED SOURCES TEXT
+                            </Typography>
+                            {matches.map((match, index) => (
+                                <Box key={index} sx={{ mb: 3, p: 2, bgcolor: '#fff', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+                                    <Typography variant="subtitle2" fontWeight={800} color="primary.main" gutterBottom>
+                                        {match.matched_source_type === 'external' ? 'Web Source Found' : `Match with student: ${match.matched_student_name || 'Unknown'}`}
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ display: 'block', mb: 1 }} color="error.main" fontWeight={700}>
+                                        Similarity: {match.similarity_percentage}%
+                                    </Typography>
+                                    <Divider sx={{ my: 1 }} />
+                                    <Typography variant="body2" sx={{ lineHeight: 1.8, fontStyle: 'italic', color: 'text.secondary' }}>
+                                        "...{match.matched_text || 'Similar content detected in this source.'}..."
+                                    </Typography>
+                                </Box>
+                            ))}
+                        </Grid>
+                    )}
                 </Grid>
             </DialogContent>
         </Dialog>

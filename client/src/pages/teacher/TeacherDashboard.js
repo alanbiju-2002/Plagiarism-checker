@@ -26,6 +26,7 @@ import {
   ExitToApp as LogoutIcon,
   AccountCircle,
   SchoolRounded as SchoolIcon,
+  Chat as ChatIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import MyClasses from './MyClasses';
@@ -33,6 +34,7 @@ import CreateClass from './CreateClass';
 import CreateAssignment from './CreateAssignment';
 import ViewSubmissions from './ViewSubmissions';
 import SubmissionStatus from './SubmissionStatus';
+import ChatDrawer from '../../components/chat/ChatDrawer';
 
 const drawerWidth = 260;
 
@@ -41,6 +43,7 @@ const TeacherDashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [anchorEl, setAnchorEl] = useState(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   const menuItems = [
     { text: 'My Classes', icon: <ClassIcon />, path: '/teacher/classes' },
@@ -101,6 +104,19 @@ const TeacherDashboard = () => {
             <Typography variant="body2" fontWeight={600} sx={{ display: { xs: 'none', sm: 'block' }, color: 'text.secondary' }}>
               {user?.full_name}
             </Typography>
+
+            <Tooltip title="Open Chat">
+              <IconButton 
+                onClick={() => setIsChatOpen(true)}
+                sx={{ 
+                  bgcolor: isChatOpen ? 'secondary.soft' : 'transparent',
+                  color: isChatOpen ? 'secondary.main' : 'text.secondary',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <ChatIcon />
+              </IconButton>
+            </Tooltip>
             <Tooltip title="Account settings">
               <IconButton
                 onClick={handleMenu}
@@ -222,6 +238,12 @@ const TeacherDashboard = () => {
           </Routes>
         </Container>
       </Box>
+
+      <ChatDrawer 
+        open={isChatOpen} 
+        onClose={() => setIsChatOpen(false)} 
+        user={user} 
+      />
     </Box>
 
   );

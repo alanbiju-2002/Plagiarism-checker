@@ -28,6 +28,7 @@ import {
   PersonAdd as AddUserIcon,
   Assignment as AssignIcon,
   HistoryEdu as HistoryIcon,
+  DeleteForever as DeleteIcon,
 } from '@mui/icons-material';
 import api from '../../utils/api';
 
@@ -87,6 +88,19 @@ const MyClasses = () => {
       } catch (error) {
         console.error('Error clearing class submissions:', error);
         alert(error.response?.data?.message || 'Failed to clear submissions');
+      }
+    }
+  };
+
+  const handleDeleteClass = async (classItem) => {
+    if (window.confirm(`Are you sure you want to delete the class "${classItem.class_name}"? This will permanently delete all assignments, submissions, and enrollment data. This action cannot be undone.`)) {
+      try {
+        const response = await api.delete(`/api/teacher/classes/${classItem.id}`);
+        alert(response.data.message);
+        fetchClasses();
+      } catch (error) {
+        console.error('Error deleting class:', error);
+        alert(error.response?.data?.message || 'Failed to delete class');
       }
     }
   };
@@ -237,6 +251,18 @@ const MyClasses = () => {
                         sx={{ mt: 1, borderRadius: 2, borderStyle: 'dashed' }}
                       >
                         Clear Class Logic
+                      </Button>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Button
+                        fullWidth
+                        variant="soft"
+                        color="error"
+                        startIcon={<DeleteIcon fontSize="small" />}
+                        onClick={() => handleDeleteClass(classItem)}
+                        sx={{ mt: 1, borderRadius: 2, fontWeight: 700, bgcolor: '#fee2e2', color: '#dc2626' }}
+                      >
+                        Delete Class
                       </Button>
                     </Grid>
                   </Grid>

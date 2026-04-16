@@ -97,11 +97,13 @@ router.get('/classes/:classId/assignments', async (req, res) => {
           WHEN status = 'rejected' THEN 'rejected' 
           ELSE 'pending' 
         END 
-        FROM submissions WHERE assignment_id = a.id AND student_id = ?) as submission_status
+        FROM submissions WHERE assignment_id = a.id AND student_id = ?) as submission_status,
+       se.extended_until
        FROM assignments a
+       LEFT JOIN submission_extensions se ON a.id = se.assignment_id AND se.student_id = ?
        WHERE a.class_id = ?
        ORDER BY a.created_at DESC`,
-      [student_id, classId]
+      [student_id, student_id, classId]
     );
 
     res.json({ assignments });
@@ -177,6 +179,35 @@ router.get('/submissions/:submissionId', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching submission details:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Leave a class
+router.delete('/classes/:classId/leave', async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const student_id = req.user.id;
+
+    // Verify student is in the class
+    const [enrollment] = await pool.execute(
+      'SELECT id FROM class_students WHERE class_id = ? AND student_id = ?',
+      [classId, student_id]
+    );
+
+    if (enrollment.length === 0) {
+      return res.status(404).json({ message: 'Not enrolled in this class' });
+    }
+
+    // Remove student from class
+    await pool.execute(
+      'DELETE FROM class_students WHERE id = ?',
+      [enrollment[0].id]
+    );
+
+    res.json({ message: 'Successfully left the class' });
+  } catch (error) {
+    console.error('Error leaving class:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
